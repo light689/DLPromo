@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>DLPromo · 番茄专注时钟</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23e01f26'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23ffd100'/%3E%3C/svg%3E">
+<style>
+/* ========== DSEG7 七段数码管字体 (本地内嵌, 无外部依赖) ========== */
+@font-face {
+  font-family: 'DSEG7';
+  src: url(data:font/woff2;base64,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) format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ============================================================
+   DLPromo · ТОМАТО-ЧАСЫ — 样式表
+   ============================================================ */
+:root {
+  --paper: #efe9dc;
+  --ink:   #111;
+  --red:   #e01f26;
+  --yellow:#ffd100;
+  --blue:  #1e50aa;
+  --gray:  #8a8578;
+  --mode:  var(--red);
+  --font:  'Arial Black','Impact','Noto Sans SC','Microsoft YaHei',system-ui,sans-serif;
+}
+body[data-mode="short"] { --mode: #d4a000; }
+body[data-mode="long"]  { --mode: var(--blue); }
+
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+
+html { font-size:15px; }
+body {
+  font-family: var(--font);
+  font-weight: 700;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  background-image:
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(17,17,17,.06) 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, rgba(17,17,17,.06) 31px 32px);
+}
+a { color:inherit; text-decoration:none; }
+input,button,select,textarea { font-family:inherit; }
+button { cursor:pointer; }
+input::placeholder { color:#aaa; }
+input[type="checkbox"] { accent-color:var(--red); width:16px; height:16px; }
+
+/* ========== 装饰固定层 ========== */
+.deco { position:fixed; inset:0; pointer-events:none; z-index:0; overflow:hidden; }
+.deco .dc { position:absolute; }
+.deco .c1 { width:480px; height:480px; border-radius:50%; background:var(--red); opacity:.09; top:-180px; right:-140px; }
+.deco .c2 { width:220px; height:220px; background:var(--yellow); opacity:.11; transform:rotate(45deg); bottom:80px; left:-60px; }
+.deco .c3 { width:300px; height:300px; border-radius:50%; border:18px solid var(--ink); opacity:.06; top:40%; left:-100px; }
+.deco .c4 { width:140px; height:140px; background:var(--blue); opacity:.08; border-radius:50%; bottom:15%; right:10%; }
+.deco .c5 { position:absolute; top:0; left:0; width:100%; height:100%; background:repeating-linear-gradient(-45deg, transparent 0 24px, rgba(0,0,0,.03) 24px 25px); }
+
+/* ========== 滚动字幕 ========== */
+.ticker {
+  background: var(--ink); color: var(--yellow); font-size: 13px; letter-spacing: 2px;
+  overflow: hidden; padding: 6px 0; position: relative; z-index: 2;
+  text-transform: uppercase;
+}
+.ticker-track {
+  display: inline-flex; white-space: nowrap; animation: marquee 30s linear infinite;
+}
+.ticker-track span { padding: 0 4px; }
+@keyframes marquee { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+
+/* ========== 面板 ========== */
+.panel {
+  background: #fbf7ec; border: 3px solid var(--ink); box-shadow: 6px 6px 0 var(--ink);
+  padding: 18px 20px 20px; position: relative; transition: box-shadow .15s;
+}
+.panel-head {
+  display: flex; align-items: center; gap: 8px; letter-spacing: 2px;
+  font-size: 13px; text-transform: uppercase; margin-bottom: 14px; padding-bottom: 8px;
+  border-bottom: 2px solid var(--ink);
+}
+.ph-sq { display:inline-block; width:12px; height:12px; background:var(--red); flex-shrink:0; }
+.head-acts { margin-left:auto; display:flex; gap:6px; }
+.stripes {
+  height: 10px; background: repeating-linear-gradient(-45deg, var(--red) 0 12px, var(--ink) 12px 24px);
+  margin: 0 -20px 14px;
+}
+
+/* ========== 头部 ========== */
+.masthead {
+  display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+  margin-bottom: 24px; z-index: 1; position: relative;
+}
+.brand { display:flex; align-items:center; gap:12px; }
+.brand-mark { display:flex; gap:4px; }
+.brand-mark .sq { width:16px; height:16px; display:block; }
+.brand-mark .red { background:var(--red); }
+.brand-mark .yellow { background:var(--yellow); }
+.brand-mark .black { background:var(--ink); }
+.brand h1 { font-size: 1.5rem; letter-spacing: 3px; line-height:1.1; }
+.brand .cn { font-size: .7rem; font-weight: 400; letter-spacing: 2px; color: var(--gray); display:block; }
+.slogan { font-size: .7rem; letter-spacing: 1px; color:var(--gray); margin-top:2px; }
+.chips { display:flex; gap:14px; }
+.chip { text-align:center; background:var(--ink); color:#fff; padding:8px 14px 6px; min-width:82px; }
+.chip-l { font-size:10px; letter-spacing:2px; display:block; opacity:.7; }
+.chip b { font-size:1.2rem; letter-spacing:1px; display:block; margin-top:2px; }
+.net { margin-left:auto; font-size:11px; border:1px solid var(--ink); padding:2px 8px; }
+body.offline .net { color:var(--red); border-color:var(--red); }
+
+/* ========== 布局网格 ========== */
+.layout {
+  display: grid; grid-template-columns: minmax(370px,420px) 1fr; gap: 28px;
+  align-items: start; z-index: 1; position: relative; margin-bottom: 28px;
+}
+@media (max-width: 1000px) { .layout { grid-template-columns: 1fr; } }
+
+/* ========== 计时器卡片 ========== */
+.mode-tabs { display:flex; margin-bottom:12px; }
+.mode-tabs button {
+  flex:1; padding:8px; font-weight:900; font-size:13px; letter-spacing:2px; text-transform:uppercase;
+  border:2px solid var(--ink); background:transparent; color:var(--ink); cursor:pointer;
+  border-right-width:0; transition: background .15s, color .15s;
+}
+.mode-tabs button:last-child { border-right-width:2px; }
+.mode-tabs button.active { background:var(--ink); color:#fff; }
+.mode-tabs button:not(.active):hover { background:rgba(17,17,17,.08); }
+
+.ring-wrap {
+  position:relative; width:min(310px,72vw); aspect-ratio:1; margin:8px auto 0;
+}
+.ring-wrap svg { width:100%; height:100%; transform:rotate(-90deg); display:block; }
+.ring-bg { fill:none; stroke:rgba(17,17,17,.12); stroke-width:13; }
+.ring-fg { fill:none; stroke:var(--mode); stroke-width:13; stroke-linecap:butt; transition: stroke-dashoffset .2s linear, stroke .3s; }
+.digits {
+  position:absolute; inset:0; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:6px; pointer-events:none;
+}
+.digits .t {
+  font-family: 'DSEG7','Consolas','Menlo',monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(3.2rem, 12vw, 5rem);
+  letter-spacing: 8px;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--mode);
+  text-shadow: 0 0 12px var(--mode), 0 0 30px var(--mode);
+  background: rgba(17,17,17,.88);
+  padding: 0.15em 0.3em 0.1em;
+  border-radius: 4px;
+  display: inline-block;
+}
+.digits .u { font-size:12px; letter-spacing:4px; color:var(--gray); text-transform:uppercase; }
+.cycle { text-align:center; font-size:12px; letter-spacing:1px; color:var(--gray); margin:6px 0 10px; }
+
+.presets { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
+.presets button {
+  padding:5px 14px; font-weight:900; font-size:13px; letter-spacing:1px;
+  border:2px solid var(--ink); background:transparent; cursor:pointer;
+  transition: background .12s, color .12s;
+}
+.presets button.active { background:var(--ink); color:#fff; }
+.presets button:not(.active):hover { background:rgba(17,17,17,.08); }
+
+.field { margin-bottom:12px; }
+.field label { display:block; font-size:12px; letter-spacing:2px; color:var(--gray); margin-bottom:3px; }
+.field input { width:100%; padding:10px 12px; border:2px solid var(--ink); background:transparent; font-size:14px; }
+
+.controls { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.controls .btn.big { flex:1; min-width:0; }
+
+.opts { display:flex; flex-wrap:wrap; gap:8px 16px; font-size:12px; letter-spacing:1px; }
+.opts label { display:flex; align-items:center; gap:4px; cursor:pointer; }
+
+.kbd-hint { font-size:11px; color:var(--gray); letter-spacing:1px; margin-top:10px; }
+
+/* ========== 按钮 ========== */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:6px; padding:10px 16px;
+  font-weight:900; font-size:13px; letter-spacing:2px; text-transform:uppercase;
+  border:3px solid var(--ink); background:#fff; color:var(--ink);
+  box-shadow:4px 4px 0 var(--ink); transition: transform .06s, box-shadow .06s;
+  cursor:pointer; font-family:inherit; user-select:none;
+}
+.btn:active { transform:translate(3px,3px); box-shadow:1px 1px 0 var(--ink); }
+.btn.big { padding:14px 18px; font-size:15px; }
+.btn-sm { padding:5px 10px; font-size:11px; box-shadow:3px 3px 0 var(--ink); }
+.btn-sm:active { transform:translate(2px,2px); box-shadow:1px 1px 0 var(--ink); }
+.btn-red { background:var(--red); color:#fff; }
+.btn-yellow { background:var(--yellow); color:var(--ink); }
+.btn-black { background:var(--ink); color:#fff; }
+.btn-ghost { background:transparent; box-shadow:none; border-width:2px; }
+.btn-ghost:active { transform:translate(2px,2px); background:rgba(17,17,17,.06); box-shadow:none; }
+.btn-ghost.danger { color:var(--red); border-color:var(--red); }
+.btn-ghost.danger:hover { background:var(--red); color:#fff; }
+
+/* ========== 热力图 ========== */
+.hm-box { display:flex; gap:4px; margin-bottom:8px; overflow-x:auto; }
+.hm-days { display:grid; grid-template-rows:repeat(7,12px); gap:3px; font-size:9px; line-height:12px; text-align:center; color:var(--gray); }
+.hm-cols { display:flex; gap:3px; }
+.hm-col { display:flex; flex-direction:column; gap:3px; }
+.hm-cell { width:12px; height:12px; border:1px solid rgba(17,17,17,.18); cursor:pointer; position:relative; }
+.hm-cell.future { opacity:.25; pointer-events:none; }
+.hm-cell[data-l="0"] { background:#efe9dc; }
+.hm-cell[data-l="1"] { background:#fbd5d5; }
+.hm-cell[data-l="2"] { background:#f79a9a; }
+.hm-cell[data-l="3"] { background:#f06060; }
+.hm-cell[data-l="4"] { background:#d91f26; }
+.hm-cell[data-l="5"] { background:#8c0d12; }
+.hm-cell:hover { outline:2px solid var(--ink); z-index:2; }
+.hm-ml { font-size:8px; height:14px; line-height:14px; text-align:center; color:var(--gray); letter-spacing:0; white-space:nowrap; }
+.hm-foot { display:flex; justify-content:space-between; align-items:center; font-size:11px; color:var(--gray); flex-wrap:wrap; gap:8px; }
+.hm-foot .legend { display:flex; align-items:center; gap:2px; }
+.hm-foot .legend span { width:11px; height:11px; border:1px solid rgba(17,17,17,.18); display:inline-block; }
+.hm-foot .legend span[data-l="0"] { background:#efe9dc; }
+.hm-foot .legend span[data-l="1"] { background:#fbd5d5; }
+.hm-foot .legend span[data-l="2"] { background:#f79a9a; }
+.hm-foot .legend span[data-l="3"] { background:#f06060; }
+.hm-foot .legend span[data-l="4"] { background:#d91f26; }
+.hm-foot .legend span[data-l="5"] { background:#8c0d12; }
+
+/* ========== 统计 ========== */
+.stats-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; }
+.st { text-align:center; padding:10px 6px; border:2px solid var(--ink); background:rgba(17,17,17,.02); }
+.st-l { display:block; font-size:10px; letter-spacing:2px; color:var(--gray); margin-bottom:3px; }
+.st b { font-size:1.3rem; letter-spacing:1px; }
+
+/* ========== 记录档案 ========== */
+.filters { display:flex; gap:4px; align-items:center; margin-bottom:10px; flex-wrap:wrap; }
+.filters button {
+  padding:3px 10px; font-weight:900; font-size:11px; letter-spacing:1px;
+  border:2px solid var(--ink); background:transparent; cursor:pointer;
+  transition: background .12s, color .12s;
+}
+.filters button.active { background:var(--ink); color:#fff; }
+.rec-count { margin-left:auto; font-size:11px; color:var(--gray); }
+.rec-wrap { max-height:400px; overflow-y:auto; }
+.rec-wrap::-webkit-scrollbar { width:6px; }
+.rec-wrap::-webkit-scrollbar-track { background:transparent; }
+.rec-wrap::-webkit-scrollbar-thumb { background:var(--gray); border-radius:3px; }
+table { width:100%; border-collapse:collapse; font-size:12px; }
+th { background:var(--ink); color:#fff; padding:6px 8px; letter-spacing:1px; font-weight:900; text-align:left; }
+td,th { border:1px solid var(--ink); padding:6px 8px; vertical-align:middle; }
+tr:nth-child(even) { background:rgba(17,17,17,.03); }
+tr:hover { background:rgba(224,31,38,.06); }
+.c-date { white-space:nowrap; }
+.c-time { display:block; font-size:10px; color:var(--gray); }
+.c-task { max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c-reason { max-width:100px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.c-act .btn { margin:1px; }
+.bd { display:inline-block; padding:1px 6px 0; font-weight:900; font-size:10px; letter-spacing:1px; border:2px solid var(--ink); line-height:1.4; }
+.bd-done { background:var(--red); color:#fff; border-color:var(--red); }
+.bd-skip { background:var(--yellow); border-color:var(--yellow); }
+.bd-abandon { background:#fff; color:var(--ink); }
+.empty { text-align:center; color:var(--gray); padding:30px 10px; font-size:13px; letter-spacing:2px; }
+
+/* ========== 模态框 ========== */
+.modal {
+  position:fixed; inset:0; background:rgba(17,17,17,.72); display:none;
+  align-items:center; justify-content:center; z-index:100; padding:16px;
+}
+.modal.open { display:flex; }
+.modal-panel {
+  background:var(--paper); border:3px solid var(--ink); box-shadow:10px 10px 0 rgba(0,0,0,.5);
+  width:100%; max-width:500px; max-height:90vh; overflow-y:auto; position:relative;
+}
+.modal-top {
+  background:var(--ink); color:#fff; padding:10px 16px; display:flex;
+  justify-content:space-between; align-items:center; font-weight:900;
+  letter-spacing:2px; text-transform:uppercase; font-size:14px;
+}
+.modal-top .x { background:none; border:none; color:#fff; font-size:20px; cursor:pointer; padding:0 4px; line-height:1; }
+.modal-body { padding:18px; }
+.modal-body.center { text-align:center; }
+.modal-acts { display:flex; gap:10px; margin-top:16px; justify-content:flex-end; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.form-grid label.span2 { grid-column:span 2; }
+.form-grid label { display:flex; flex-direction:column; gap:3px; font-size:12px; letter-spacing:1px; }
+.form-grid input,.form-grid select,.form-grid textarea {
+  padding:8px 10px; border:2px solid var(--ink); background:transparent; font-size:14px; width:100%;
+}
+.form-grid textarea { resize:vertical; }
+.end-title { font-size:1.6rem; letter-spacing:3px; margin-bottom:6px; }
+.end-desc { font-size:14px; color:var(--gray); margin-bottom:16px; line-height:1.5; }
+.end-desc b { color:var(--ink); }
+.end-acts { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; margin-bottom:16px; }
+.end-acts .btn { min-width:130px; flex:1; }
+.end-notes { font-size:11px; color:var(--gray); letter-spacing:1px; line-height:1.5; }
+
+/* ========== 日模态框 ========== */
+.day-row { display:flex; align-items:center; gap:10px; padding:6px 0; border-bottom:1px solid rgba(17,17,17,.1); }
+.day-row:last-child { border:none; }
+.day-task { flex:1; font-size:13px; }
+.day-time { font-size:11px; color:var(--gray); }
+.day-min { font-weight:900; font-size:13px; min-width:40px; text-align:right; }
+
+/* ========== Toast ========== */
+#toasts { position:fixed; bottom:20px; right:20px; z-index:200; display:flex; flex-direction:column; gap:8px; max-width:340px; }
+.toast {
+  padding:12px 16px; background:var(--ink); color:#fff; border-left:4px solid var(--yellow);
+  font-size:13px; letter-spacing:1px; box-shadow:4px 4px 0 rgba(0,0,0,.35);
+  animation: toastIn .3s ease; transition: opacity .3s, transform .3s;
+}
+.toast.err { border-left-color:var(--red); }
+.toast.warn { border-left-color:var(--yellow); }
+.toast.out { opacity:0; transform:translateX(30px); }
+@keyframes toastIn { from { opacity:0; transform:translateX(30px); } to { opacity:1; transform:translateX(0); } }
+
+/* ========== 页脚 ========== */
+footer { position:relative; z-index:1; margin-top:8px; }
+footer p { font-size:11px; color:var(--gray); letter-spacing:1px; text-align:center; padding:12px 0; }
+
+
+/* ========== 移动端响应式 ========== */
+@media (max-width: 720px) {
+  html { font-size: 14px; }
+  body { overflow-x: hidden; }
+  .masthead { margin: 12px 10px 16px !important; padding: 14px 14px !important; flex-direction: column; align-items: stretch; gap: 8px; }
+  .brand h1 { font-size: 1.3rem; }
+  .brand .cn { font-size: .65rem; }
+  .chips { gap: 8px; justify-content: center; }
+  .chip { min-width: 70px; padding: 6px 10px 5px; }
+  .chip b { font-size: 1rem; }
+  .net { margin-left: 0; align-self: flex-end; }
+  .panel { padding: 12px 14px; }
+  .ring-wrap { width: min(260px, 80vw); }
+  .presets button { padding: 5px 10px; font-size: 12px; }
+  .controls .btn.big { padding: 12px 14px; font-size: 14px; min-height: 44px; }
+  .controls .btn { padding: 8px 12px; font-size: 12px; min-height: 44px; }
+  .field input { padding: 10px 12px; font-size: 16px; } /* 16px 防止 iOS 缩放 */
+  .opts { font-size: 11px; gap: 6px 10px; }
+  .kbd-hint { font-size: 10px; }
+  .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .st b { font-size: 1.1rem; }
+  .hm-cell { width: 10px; height: 10px; }
+  .hm-days { grid-template-rows: repeat(7, 10px); font-size: 8px; line-height: 10px; }
+  .hm-cols { gap: 2px; }
+  .hm-col { gap: 2px; }
+  .rec-wrap { max-height: 300px; font-size: 11px; }
+  th, td { padding: 4px 6px; }
+  .c-date { font-size: 11px; }
+  .c-task { max-width: 80px; }
+  .c-reason { max-width: 60px; }
+  .filters button { font-size: 10px; padding: 3px 8px; }
+  .modal-panel { max-width: 100%; margin: 0 8px; }
+  .modal-body { padding: 14px; }
+  .form-grid { grid-template-columns: 1fr; }
+  .form-grid label.span2 { grid-column: 1; }
+  .end-acts .btn { min-width: 100px; flex: 1; font-size: 12px; padding: 10px 12px; }
+  .end-title { font-size: 1.3rem; }
+  #toasts { bottom: 12px; right: 12px; left: 12px; max-width: 100%; }
+  .toast { font-size: 12px; padding: 10px 14px; }
+  .digits .t { font-size: clamp(2.6rem, 14vw, 3.6rem); letter-spacing: 6px; }
+  .ticker { font-size: 11px; letter-spacing: 1px; }
+  .ticker-track { animation-duration: 20s; }
+  .kbd-hint { display: none; }
+}
+
+@media (max-width: 400px) {
+  .masthead { margin: 8px 6px 12px !important; padding: 10px 10px !important; }
+  .brand h1 { font-size: 1.1rem; letter-spacing: 1px; }
+  .chip { min-width: 60px; padding: 5px 8px 4px; }
+  .chip b { font-size: .9rem; }
+  .ring-wrap { width: min(200px, 88vw); }
+  .layout { gap: 12px; }
+  .panel { padding: 10px 10px; }
+  .digits .t { font-size: clamp(2rem, 16vw, 2.8rem); letter-spacing: 4px; }
+  .hm-cell { width: 8px; height: 8px; }
+  .hm-days { grid-template-rows: repeat(7, 8px); font-size: 7px; line-height: 8px; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .end-acts { flex-direction: column; }
+  .end-acts .btn { width: 100%; }
+}
+
+</style>
+</head>
+<body data-mode="focus">
+
+<!-- 装饰 -->
+<div class="deco"><div class="dc c1"></div><div class="dc c2"></div><div class="dc c3"></div><div class="dc c4"></div><div class="dc c5"></div></div>
+
+<!-- 滚动字幕 -->
+<div class="ticker"><div class="ticker-track" id="tickerTrack"><span>★ DLPROMO ★ ТОМАТО-ЧАСЫ ★ 专注即生产 ★ 时间即材料 ★ 25+5=30 ★ 完成·跳过·放弃 ★ ТРУД ★ РЕКОРД ★ 记录即档案 ★ НЕ СДАВАТЬСЯ ★</span><span>★ DLPROMO ★ ТОМАТО-ЧАСЫ ★ 专注即生产 ★ 时间即材料 ★ 25+5=30 ★ 完成·跳过·放弃 ★ ТРУД ★ РЕКОРД ★ 记录即档案 ★ НЕ СДАВАТЬСЯ ★</span></div></div>
+
+<!-- 头部 -->
+<header class="masthead panel" style="max-width:1200px;">
+  <div class="brand">
+    <div class="brand-mark"><span class="sq red"></span><span class="sq yellow"></span><span class="sq black"></span></div>
+    <div>
+      <h1>DLPromo <span class="cn">番茄专注时钟 · ТОМАТО-ЧАСЫ</span></h1>
+      <p class="slogan">专注即生产 · 时间即材料 · 记录即档案</p>
+    </div>
+  </div>
+  <div class="chips">
+    <div class="chip"><span class="chip-l">今日</span><b id="chipToday">0m</b></div>
+    <div class="chip"><span class="chip-l">本周</span><b id="chipWeek">0m</b></div>
+    <div class="chip"><span class="chip-l">总计</span><b id="chipTotal">0m</b></div>
+  </div>
+  <span class="net" id="netState">在线</span>
+</header>
+
+<!-- 主网格 -->
+<main class="layout" style="max-width:1200px;">
+
+  <!-- 左：计时器 -->
+  <section class="panel timer-panel">
+    <div class="panel-head"><span class="ph-sq"></span> 计时器 // ТАЙМЕР </div>
+    <div class="mode-tabs" id="modeTabs">
+      <button data-mode="focus" class="active">专注</button>
+      <button data-mode="short">短休</button>
+      <button data-mode="long">长休</button>
+    </div>
+    <div class="ring-wrap">
+      <svg viewBox="0 0 220 220">
+        <circle class="ring-bg" cx="110" cy="110" r="98"/>
+        <circle class="ring-fg" id="ringFg" cx="110" cy="110" r="98" stroke-dasharray="615.752" stroke-dashoffset="0"/>
+      </svg>
+      <div class="digits">
+        <div class="t" id="time">25:00</div>
+        <div class="u" id="modeLabel">专注·FOCUS</div>
+      </div>
+    </div>
+    <div class="cycle" id="cycleLabel">本轮 0 / 4 个番茄</div>
+    <div class="presets" id="presets">
+      <button data-min="15">15</button>
+      <button data-min="25" class="active">25</button>
+      <button data-min="50">50</button>
+      <button data-min="90">90</button>
+      <button id="btnCustom">自定义</button>
+    </div>
+    <div class="field">
+      <label for="taskInput">任务 // ЗАДАЧА</label>
+      <input id="taskInput" list="taskList" placeholder="本轮专注做什么？" maxlength="200" autocomplete="off">
+      <datalist id="taskList"></datalist>
+    </div>
+    <div class="controls">
+      <button class="btn btn-red big" id="btnStart">开始</button>
+      <button class="btn btn-black big" id="btnPause" style="display:none">暂停</button>
+      <button class="btn btn-yellow" id="btnReset">重置</button>
+      <button class="btn btn-ghost" id="btnEnd">结束</button>
+    </div>
+    <div class="opts">
+      <label><input type="checkbox" id="optAutoShort"> 专注后自动休息</label>
+      <label><input type="checkbox" id="optAutoFocus"> 休息后自动专注</label>
+      <label><input type="checkbox" id="optSound" checked> 提示音</label>
+      <label><input type="checkbox" id="optNotify"> 系统通知</label>
+    </div>
+    <div class="kbd-hint">快捷键：空格=开始/暂停 · R=重置 · E=结束</div>
+  </section>
+
+  <!-- 右：热力图 + 统计 + 记录 -->
+  <div style="display:flex;flex-direction:column;gap:24px;">
+
+    <!-- 热力图 -->
+    <section class="panel">
+      <div class="panel-head"><span class="ph-sq"></span> 专注热力图 // ТЕПЛОВАЯ КАРТА <span class="head-acts"><button class="btn btn-sm" id="btnRefresh">⟳ 刷新</button></span></div>
+      <div class="hm-box">
+        <div class="hm-days"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
+        <div class="hm-cols" id="hmCols"></div>
+      </div>
+      <div class="hm-foot">
+        <div class="legend">少 <span data-l="0"></span><span data-l="1"></span><span data-l="2"></span><span data-l="3"></span><span data-l="4"></span><span data-l="5"></span> 多</div>
+        <div class="hm-info" id="hmInfo"></div>
+      </div>
+    </section>
+
+    <!-- 统计 -->
+    <section class="panel">
+      <div class="panel-head"><span class="ph-sq"></span> 统计 // СТАТИСТИКА</div>
+      <div class="stats-grid">
+        <div class="st"><span class="st-l">完成</span><b id="statDone">0</b></div>
+        <div class="st"><span class="st-l">跳过</span><b id="statSkip">0</b></div>
+        <div class="st"><span class="st-l">放弃</span><b id="statAbandon">0</b></div>
+        <div class="st"><span class="st-l">最长连续</span><b id="statStreak">0天</b></div>
+        <div class="st"><span class="st-l">近30日均</span><b id="statAvg">0分</b></div>
+        <div class="st"><span class="st-l">累计时长</span><b id="statTotal2">0</b></div>
+      </div>
+    </section>
+
+    <!-- 记录 -->
+    <section class="panel">
+      <div class="panel-head"><span class="ph-sq"></span> 记录档案 // АРХИВ <span class="head-acts"><button class="btn btn-sm" id="btnExportJson">JSON</button><button class="btn btn-sm" id="btnExportCsv">CSV</button></span></div>
+      <div class="filters" id="filters">
+        <button data-kind="all" class="active">全部</button>
+        <button data-kind="done">完成</button>
+        <button data-kind="skip">跳过</button>
+        <button data-kind="abandon">放弃</button>
+        <span class="rec-count" id="recCount"></span>
+      </div>
+      <div class="rec-wrap">
+        <table><thead><tr><th>日期/时间</th><th>类型</th><th>任务</th><th>时长</th><th>原因/备注</th><th>操作</th></tr></thead><tbody id="recBody"></tbody></table>
+        <div class="empty" id="recEmpty" style="display:none">暂无记录 — 开始你的第一个番茄！</div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<!-- 页脚 -->
+<footer style="max-width:1200px;margin:0 auto;">
+  <div class="stripes"></div>
+  <p>DLPromo · ТОМАТО-ЧАСЫ — Flask + SQLite · 放弃不计入总时长，跳过按原计划入账 · 数据保存在 pomodoro.db</p>
+</footer>
+
+<!-- ============================== 模态框 ============================== -->
+
+<!-- 结算模态框 -->
+<div class="modal" id="endModal">
+  <div class="modal-panel">
+    <div class="modal-top">结算本轮 // РАСЧЁТ <button class="x">✕</button></div>
+    <div class="modal-body center">
+      <div class="end-title" id="endTitle">计时结束</div>
+      <div class="end-desc" id="endDesc"></div>
+      <div class="end-acts">
+        <button class="btn btn-red big" id="btnDone">完成 · 入账</button>
+        <button class="btn btn-yellow big" id="btnSkip">跳过 · 按原计划入账</button>
+        <button class="btn btn-black big" id="btnAbandon">放弃 · 不计入总时长</button>
+      </div>
+      <div class="end-notes">
+        <strong>跳过</strong>：按原计划时长入账，计入总专注时间<br>
+        <strong>放弃</strong>：记录原因与实际时长，不计入总专注时间
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 放弃模态框 -->
+<div class="modal" id="abandonModal">
+  <div class="modal-panel">
+    <div class="modal-top">放弃本轮 // ОТКАЗ <button class="x">✕</button></div>
+    <div class="modal-body">
+      <div class="end-desc" id="abInfo"></div>
+      <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;letter-spacing:1px;">
+        放弃原因（必填）
+        <textarea id="abReason" rows="3" maxlength="500" placeholder="例如：被电话打断 / 状态太差 / 临时有事 …" style="padding:8px 10px;border:2px solid var(--ink);background:transparent;font-size:14px;resize:vertical;width:100%;"></textarea>
+      </label>
+      <div class="modal-acts">
+        <button class="btn btn-red" id="abConfirm">确认放弃</button>
+        <button class="btn btn-ghost" id="abCancel">返回</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑记录模态框 -->
+<div class="modal" id="editModal">
+  <div class="modal-panel">
+    <div class="modal-top">编辑记录 // РЕДАКТИРОВАТЬ <button class="x">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>类型
+          <select id="eKind">
+            <option value="done">完成</option>
+            <option value="skip">跳过</option>
+            <option value="abandon">放弃</option>
+          </select>
+        </label>
+        <label>计划时长(分)<input type="number" id="ePlanned" min="1" max="600"></label>
+        <label>实际时长(分)<input type="number" id="eActual" min="1" max="600"></label>
+        <label>任务<input type="text" id="eTask" maxlength="200"></label>
+        <label>开始时间<input type="datetime-local" id="eStart"></label>
+        <label>结束时间<input type="datetime-local" id="eEnd"></label>
+        <label class="span2">放弃原因/备注<textarea id="eReason" rows="2" maxlength="500" style="resize:vertical;"></textarea></label>
+      </div>
+      <div class="modal-acts">
+        <button class="btn btn-red" id="eSave">保存</button>
+        <button class="btn btn-ghost" id="eCancel">取消</button>
+        <button class="btn btn-ghost danger" id="eDelete" style="margin-left:auto;">删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 自定义时长模态框 -->
+<div class="modal" id="customModal">
+  <div class="modal-panel">
+    <div class="modal-top">自定义时长 // НАСТРОЙКА <button class="x">✕</button></div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <label>专注(分)<input type="number" id="cuFocus" min="1" max="600"></label>
+        <label>短休(分)<input type="number" id="cuShort" min="1" max="120"></label>
+        <label>长休(分)<input type="number" id="cuLong" min="1" max="180"></label>
+      </div>
+      <div class="modal-acts">
+        <button class="btn btn-red" id="cuSave">保存</button>
+        <button class="btn btn-ghost" id="cuCancel">取消</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 日详情模态框 -->
+<div class="modal" id="dayModal">
+  <div class="modal-panel">
+    <div class="modal-top"><span id="dayTitle">—</span> <button class="x">✕</button></div>
+    <div class="modal-body" id="dayBody"></div>
+  </div>
+</div>
+
+<!-- Toast 容器 -->
+<div id="toasts"></div>
+
+<script>
+/* ============================================================
+   DLPromo · ТОМАТО-ЧАСЫ — 交互脚本
+   ============================================================ */
+
+// ---- 工具 ----
+const $ = (s, p=document) => p.querySelector(s);
+const $$ = (s, p=document) => [...p.querySelectorAll(s)];
+const pad = n => String(n).padStart(2,'0');
+const KIND_CN = { done:'完成', skip:'跳过', abandon:'放弃' };
+const escChar = c => '&#' + c.charCodeAt(0) + ';';
+const escapeHtml = s => String(s ?? '').replace(/[&<>"']/g, escChar);
+
+function fmtDate(d) {
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+}
+function fmtDT(d) {
+  return fmtDate(d)+' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function fmtHM(m) {
+  const h = Math.floor(m/60), n = m%60;
+  return h>0 ? h+'h'+n+'m' : n+'m';
+}
+function level(min) {
+  if (min<=0) return 0; if (min<25) return 1; if (min<50) return 2;
+  if (min<100) return 3; if (min<200) return 4; return 5;
+}
+
+// ---- 状态 ----
+const DEFAULTS = {
+  durations: { focus:25, short:5, long:15 },
+  opts: { autoShort:false, autoFocus:false, sound:true, notify:false }
+};
+let S = null;              // 计时器状态
+let RECS = [];             // 记录缓存
+let STATS = null;          // 统计缓存
+let F = { kind:'all' };    // 记录过滤器
+let PENDING = null;        // 待结算信息
+let editingId = null;      // 编辑中的记录 id
+let offline = false;       // 在线状态
+let visibilityHidden = false;
+
+function initState() {
+  const saved = JSON.parse(localStorage.getItem('tomato_settings') || '{}');
+  const dur = Object.assign({}, DEFAULTS.durations, saved.durations);
+  const opts = Object.assign({}, DEFAULTS.opts, saved.opts);
+  S = {
+    mode: 'focus',
+    running: false,
+    total: dur.focus*60,
+    remain: dur.focus*60,
+    endAt: 0,
+    tickId: null,
+    startedAt: null,
+    round: saved.round || 0,
+    durations: dur,
+    opts: opts,
+  };
+}
+initState();
+
+// ---- 持久化 ----
+function saveSettings() {
+  localStorage.setItem('tomato_settings', JSON.stringify({
+    durations: S.durations, opts: S.opts, round: S.round
+  }));
+}
+
+// ---- API 调用 ----
+async function api(path, opts={}) {
+  let res;
+  try {
+    res = await fetch(path, {
+      method: opts.method || 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      body: opts.body ? JSON.stringify(opts.body) : undefined,
+    });
+  } catch(e) {
+    setNet(false);
+    return { ok:false, error:'无法连接后端' };
+  }
+  setNet(true);
+  const j = await res.json().catch(() => ({ ok:false, error:'响应解析失败' }));
+  return j;
+}
+
+function setNet(ok) {
+  const was = offline;
+  offline = !ok;
+  document.body.classList.toggle('offline', offline);
+  $('#netState').textContent = offline ? '离线' : '在线';
+}
+
+// ---- 提示 ----
+function toast(msg, type='ok') {
+  const t = document.createElement('div');
+  t.className = 'toast' + (type==='err' ? ' err' : type==='warn' ? ' warn' : '');
+  t.innerHTML = msg;
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.classList.add('out'), 2600);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ---- 模态框 ----
+function openModal(id) { $('#'+id).classList.add('open'); }
+function closeModal(id) { $('#'+id).classList.remove('open'); }
+$$('.modal').forEach(m => {
+  m.addEventListener('click', e => { if (e.target===m) closeModal(m.id); });
+});
+$$('.modal .x').forEach(x => {
+  x.addEventListener('click', () => closeModal(x.closest('.modal').id));
+});
+
+// ---- 音效 ----
+let AC = null;
+function ac() {
+  if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+  if (AC.state==='suspended') AC.resume();
+  return AC;
+}
+function beep(f, dur, delay=0, type='square', vol=.24) {
+  try {
+    const t = ac().currentTime + delay;
+    const o = ac().createOscillator();
+    const g = ac().createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+    o.connect(g); g.connect(ac().destination);
+    o.start(t); o.stop(t+dur+0.05);
+  } catch(e) {}
+}
+function playWhistle() {
+  if (!S.opts.sound) return;
+  beep(740, .16, 0, 'square', .22);
+  beep(740, .16, .22, 'square', .22);
+  beep(988, .50, .44, 'square', .28);
+}
+
+// ---- 通知 ----
+function notify(title, body) {
+  if (!S.opts.notify || !('Notification' in window) || Notification.permission!=='granted') return;
+  try { new Notification(title, { body }); } catch(e) {}
+}
+
+// ---- 渲染计时器 ----
+function render() {
+  const m = Math.floor(S.remain/60), s = S.remain%60;
+  $('#time').textContent = pad(m)+':'+pad(s);
+  const C = 2*Math.PI*98, prog = S.total>0 ? S.remain/S.total : 0;
+  $('#ringFg').style.strokeDashoffset = C*(1-prog);
+  document.body.dataset.mode = S.mode;
+  $('#modeLabel').textContent = S.mode==='focus' ? '专注·FOCUS' : S.mode==='short' ? '短休·BREAK' : '长休·REST';
+  $('#btnStart').style.display = S.running ? 'none' : '';
+  $('#btnPause').style.display = S.running ? '' : 'none';
+  if (S.remain <= 0 && !S.running) {
+    $('#btnStart').textContent = '再来一轮';
+  } else if (S.remain === S.total && !S.startedAt) {
+    $('#btnStart').textContent = '开始';
+  } else {
+    $('#btnStart').textContent = '继续';
+  }
+  document.title = pad(m)+':'+pad(s)+' · '+(S.mode==='focus'?'专注':'休息')+' | ТОМАТО';
+  const r = S.round % 4;
+  const disp = S.round===0 ? 0 : (r===0?4:r);
+  $('#cycleLabel').textContent = '本轮 '+disp+' / 4 个番茄';
+  // 更新预设按钮状态
+  $$('#presets button[data-min]').forEach(b => {
+    b.classList.toggle('active', +b.dataset.min === S.durations.focus);
+  });
+  // 模式标签
+  $$('#modeTabs button').forEach(b => {
+    b.classList.toggle('active', b.dataset.mode === S.mode);
+  });
+  // 结束按钮可见性
+  $('#btnEnd').style.display = S.mode==='focus' ? '' : 'none';
+}
+
+// ---- 计时器控制 ----
+function tick() {
+  S.remain = Math.max(0, Math.round((S.endAt - Date.now())/1000));
+  render();
+  if (S.remain <= 0) { onTimerEnd(); }
+}
+
+function startTimer() {
+  if (S.running) return;
+  if (S.remain <= 0) {
+    S.total = S.durations[S.mode]*60;
+    S.remain = S.total;
+  }
+  S.running = true;
+  S.endAt = Date.now() + S.remain*1000;
+  if (!S.startedAt) S.startedAt = new Date();
+  S.tickId = setInterval(tick, 200);
+  // 请求通知权限
+  if (S.opts.notify && 'Notification' in window && Notification.permission==='default') {
+    Notification.requestPermission();
+  }
+  render();
+}
+
+function pauseTimer() {
+  if (!S.running) return;
+  clearInterval(S.tickId);
+  S.tickId = null;
+  S.remain = Math.max(0, Math.round((S.endAt - Date.now())/1000));
+  S.running = false;
+  render();
+}
+
+function resetTimer() {
+  if (S.running) { clearInterval(S.tickId); S.tickId = null; S.running = false; }
+  S.total = S.durations[S.mode]*60;
+  S.remain = S.total;
+  S.startedAt = null;
+  render();
+}
+
+function switchMode(mode) {
+  if (S.running) pauseTimer();
+  S.mode = mode;
+  resetTimer();
+}
+
+// ---- 计时结束 ----
+function onTimerEnd() {
+  clearInterval(S.tickId); S.tickId = null;
+  S.running = false; S.remain = 0; render();
+  if (S.mode === 'focus') {
+    playWhistle();
+    notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已到，请结算');
+    openEndModal(false);
+  } else {
+    playWhistle();
+    notify('休息结束', '准备开始下一轮专注');
+    S.mode = 'focus'; resetTimer();
+    if (S.opts.autoFocus) startTimer();
+  }
+}
+
+function endSession() {
+  if (S.mode !== 'focus') return;
+  if (S.remain <= 0 && !S.running) { openEndModal(false); return; }
+  if (!S.startedAt) { toast('还没有开始计时','warn'); return; }
+  pauseTimer();
+  openEndModal(true);
+}
+
+// ---- 结算 ----
+function openEndModal(early) {
+  const planned = S.durations.focus;
+  let elapsedMin = 0;
+  if (early && S.startedAt) {
+    elapsedMin = Math.max(1, Math.round((Date.now() - S.startedAt)/60000));
+  }
+  PENDING = { early, planned, elapsedMin: elapsedMin || planned };
+  $('#endTitle').textContent = early ? '提前结束 // РАНО' : '计时结束 // ГОТОВО';
+  $('#endDesc').innerHTML = early
+    ? '本轮计划 <b>'+planned+'</b> 分钟 · 已实际专注 <b>'+elapsedMin+'</b> 分钟<br>请选择结算方式：'
+    : '本轮 <b>'+planned+'</b> 分钟已到，请结算：';
+  $('#btnDone').style.display = early ? 'none' : '';
+  $('#btnDone').textContent = '完成 · 入账 '+planned+' 分钟';
+  $('#btnSkip').textContent = '跳过 · 按 '+planned+' 分钟入账';
+  $('#btnAbandon').textContent = '放弃 · 不计入总时长';
+  openModal('endModal');
+}
+
+function recordDone() { saveRecord('done', PENDING.planned, PENDING.planned, ''); }
+function recordSkip() { saveRecord('skip', PENDING.planned, PENDING.planned, ''); }
+function recordAbandon() {
+  closeModal('endModal');
+  $('#abInfo').innerHTML = '计划 <b>'+PENDING.planned+'</b> 分钟 · 实际专注 <b>'+PENDING.elapsedMin+'</b> 分钟<br><span style="color:var(--red)">不计入总专注时间</span>';
+  $('#abReason').value = '';
+  openModal('abandonModal');
+}
+
+async function saveRecord(kind, planned, actual, reason) {
+  const end = new Date();
+  const start = S.startedAt || end;
+  const payload = {
+    kind, task: $('#taskInput').value.trim(),
+    planned_minutes: planned, actual_minutes: actual, reason,
+    start_at: fmtDT(start), end_at: fmtDT(end)
+  };
+  closeModal('endModal');
+  closeModal('abandonModal');
+  const res = await api('/api/records', { method:'POST', body: payload });
+  if (res && res.ok) {
+    if (kind === 'abandon') {
+      toast('已记录放弃（'+actual+' 分钟，不计入总时长）','warn');
+    } else {
+      toast('已入账 '+planned+' 分钟专注','ok');
+    }
+    afterRecord(kind);
+    refreshAll();
+  } else {
+    toast('保存失败：'+(res&&res.error||'网络错误'),'err');
+  }
+}
+
+function afterRecord(kind) {
+  S.startedAt = null;
+  if (kind !== 'abandon') S.round++;
+  const isLong = S.round>0 && S.round%4===0;
+  S.mode = kind==='abandon' ? 'short' : (isLong ? 'long' : 'short');
+  S.total = S.durations[S.mode]*60;
+  S.remain = S.total;
+  saveSettings();
+  render();
+  if (kind !== 'abandon' && S.opts.autoShort) startTimer();
+}
+
+// ---- 数据刷新 ----
+async function refreshAll() {
+  await Promise.all([loadRecords(), loadStats()]);
+  updateTaskList();
+  render();
+}
+
+async function loadRecords() {
+  const j = await api('/api/records');
+  if (j.ok) {
+    RECS = j.data;
+    localStorage.setItem('pomo_recs', JSON.stringify(RECS));
+  } else {
+    try { RECS = JSON.parse(localStorage.getItem('pomo_recs')||'[]'); } catch(e) { RECS=[]; }
+  }
+  renderRecords();
+}
+
+async function loadStats() {
+  const j = await api('/api/stats?days=365');
+  if (j.ok) {
+    STATS = j.data;
+    localStorage.setItem('pomo_stats', JSON.stringify(STATS));
+  } else {
+    try { STATS = JSON.parse(localStorage.getItem('pomo_stats')||'null'); } catch(e) { STATS=null; }
+  }
+  renderStats();
+  renderHeatmap();
+}
+
+// ---- 渲染记录 ----
+function renderRecords() {
+  const filtered = F.kind==='all' ? RECS : RECS.filter(r => r.kind===F.kind);
+  const tbody = $('#recBody');
+  if (filtered.length===0) {
+    tbody.innerHTML = '';
+    $('#recEmpty').style.display = '';
+    $('#recCount').textContent = '';
+    return;
+  }
+  $('#recEmpty').style.display = 'none';
+  $('#recCount').textContent = '共 '+filtered.length+' 条';
+  tbody.innerHTML = filtered.map(r => {
+    const d = r.end_at.slice(0,10).replace(/-/g,'/');
+    const t = r.start_at.slice(11,16)+'–'+r.end_at.slice(11,16);
+    const min = r.kind==='abandon' ? r.actual_minutes+'分' : r.planned_minutes+'分';
+    const reason = r.reason
+      ? '<span class="rec-reason" title="'+escapeHtml(r.reason)+'">「'+escapeHtml(r.reason).slice(0,14)+'」</span>'
+      : '';
+    return '<tr data-id="'+r.id+'">'
+      +'<td class="c-date">'+d+'<span class="c-time">'+t+'</span></td>'
+      +'<td><span class="bd bd-'+r.kind+'">'+KIND_CN[r.kind]+'</span></td>'
+      +'<td class="c-task">'+(escapeHtml(r.task)||'—')+'</td>'
+      +'<td class="c-min">'+min+'</td>'
+      +'<td class="c-reason">'+reason+'</td>'
+      +'<td class="c-act"><button class="btn btn-sm btn-ghost" data-act="edit">编辑</button> <button class="btn btn-sm btn-ghost danger" data-act="del">删</button></td>'
+      +'</tr>';
+  }).join('');
+}
+
+// ---- 渲染统计 ----
+function renderStats() {
+  if (!STATS) return;
+  const c = STATS.counts || {};
+  $('#chipToday').textContent = fmtHM(STATS.today_minutes);
+  $('#chipWeek').textContent = fmtHM(STATS.week_minutes);
+  $('#chipTotal').textContent = fmtHM(STATS.total_minutes);
+  $('#statDone').textContent = c.done||0;
+  $('#statSkip').textContent = c.skip||0;
+  $('#statAbandon').textContent = c.abandon||0;
+  $('#statStreak').textContent = STATS.streak+' 天';
+  $('#statAvg').textContent = STATS.avg30+' 分';
+  $('#statTotal2').textContent = fmtHM(STATS.total_minutes);
+}
+
+// ---- 渲染热力图 ----
+function renderHeatmap() {
+  const daily = STATS ? STATS.daily : [];
+  if (!daily.length) return;
+  const map = {};
+  let active=0, sum=0;
+  daily.forEach(d => { map[d.date]=d.minutes; if(d.minutes>0){active++; sum+=d.minutes;} });
+  const end = new Date(); end.setHours(0,0,0,0);
+  const start = new Date(end); start.setDate(end.getDate()-(daily.length-1));
+  const dow = start.getDay(); if (dow!==0) start.setDate(start.getDate()-dow);
+  const todayS = fmtDate(end);
+  let prevMonth = -1, html = '';
+  for (let w=0;;w++) {
+    const ws = new Date(start); ws.setDate(start.getDate()+w*7);
+    if (ws > end) break;
+    const cells = [];
+    for (let i=0;i<7;i++) {
+      const dd = new Date(ws); dd.setDate(ws.getDate()+i);
+      const ds = fmtDate(dd);
+      const min = map[ds]||0;
+      const future = dd > end ? ' future' : '';
+      cells.push('<div class="hm-cell'+future+'" data-l="'+level(min)+'" data-date="'+ds+'" title="'+ds+' · '+min+' 分钟"></div>');
+    }
+    const m = ws.getMonth();
+    const label = (m!==prevMonth && ws.getDate()<=7) ? (m+1)+'月' : '';
+    prevMonth = m;
+    html += '<div class="hm-col">'+cells.join('')+'<div class="hm-ml">'+label+'</div></div>';
+  }
+  $('#hmCols').innerHTML = html;
+  $('#hmInfo').textContent = daily.length+' 天 · 专注 '+active+' 天 · 合计 '+fmtHM(sum);
+}
+
+// ---- 日详情 ----
+$('#hmCols').addEventListener('click', e => {
+  const c = e.target.closest('.hm-cell');
+  if (!c || c.classList.contains('future')) return;
+  const ds = c.dataset.date;
+  const recs = RECS.filter(r => r.end_at.slice(0,10)===ds);
+  const min = STATS ? STATS.daily.find(d => d.date===ds) : null;
+  $('#dayTitle').textContent = ds + ' 共 '+(recs.length||0)+' 条';
+  if (min && min.minutes>0) {
+    $('#dayTitle').textContent += ' · 专注 '+fmtHM(min.minutes)+' · 放弃 '+(min.abandons||0)+' 次';
+  }
+  if (recs.length) {
+    $('#dayBody').innerHTML = recs.map(r => {
+      const t = r.start_at.slice(11,16)+'–'+r.end_at.slice(11,16);
+      return '<div class="day-row">'
+        +'<span class="bd bd-'+r.kind+'">'+KIND_CN[r.kind]+'</span>'
+        +'<span class="day-task">'+(escapeHtml(r.task)||'（无任务）')+'</span>'
+        +'<span class="day-time">'+t+'</span>'
+        +'<span class="day-min">'+(r.kind==='abandon'?r.actual_minutes:r.planned_minutes)+'分</span>'
+        +'</div>';
+    }).join('');
+  } else {
+    $('#dayBody').innerHTML = '<div class="empty">当日无记录</div>';
+  }
+  openModal('dayModal');
+});
+
+// ---- 编辑记录 ----
+function openEdit(rec) {
+  editingId = rec.id;
+  $('#eKind').value = rec.kind;
+  $('#ePlanned').value = rec.planned_minutes;
+  $('#eActual').value = rec.actual_minutes;
+  $('#eTask').value = rec.task;
+  $('#eReason').value = rec.reason;
+  $('#eStart').value = rec.start_at.slice(0,16).replace(' ','T');
+  $('#eEnd').value = rec.end_at.slice(0,16).replace(' ','T');
+  syncActualField();
+  openModal('editModal');
+}
+
+function syncActualField() {
+  const k = $('#eKind').value;
+  const dis = k !== 'abandon';
+  $('#eActual').disabled = dis;
+  if (dis) $('#eActual').value = $('#ePlanned').value;
+}
+
+$('#eKind').addEventListener('change', syncActualField);
+$('#ePlanned').addEventListener('input', () => {
+  if ($('#eKind').value !== 'abandon') $('#eActual').value = $('#ePlanned').value;
+});
+
+async function saveEdit() {
+  const kind = $('#eKind').value;
+  const planned = parseInt($('#ePlanned').value) || 0;
+  const actual = parseInt($('#eActual').value) || planned;
+  const task = $('#eTask').value.trim();
+  const reason = $('#eReason').value.trim();
+  const start = $('#eStart').value.replace('T',' ')+':00';
+  const end = $('#eEnd').value.replace('T',' ')+':00';
+  if (planned <= 0) { toast('计划时长必须大于 0','err'); return; }
+  if (kind === 'abandon' && !reason) { toast('放弃记录必须填写原因','err'); return; }
+  if (!start || !end) { toast('时间不能为空','err'); return; }
+  const res = await api('/api/records/'+editingId, {
+    method: 'PATCH',
+    body: { kind, task, planned_minutes:planned, actual_minutes:actual, reason, start_at:start, end_at:end }
+  });
+  if (res.ok) {
+    toast('已更新记录','ok');
+    closeModal('editModal');
+    refreshAll();
+  } else {
+    toast('更新失败：'+(res.error||'错误'),'err');
+  }
+}
+
+async function deleteEdit() {
+  if (!confirm('确认删除此记录？')) return;
+  const res = await api('/api/records/'+editingId, { method:'DELETE' });
+  if (res.ok) {
+    toast('已删除记录','ok');
+    closeModal('editModal');
+    refreshAll();
+  } else {
+    toast('删除失败','err');
+  }
+}
+
+// ---- 记录操作事件 ----
+$('#recBody').addEventListener('click', async e => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const id = +tr.dataset.id;
+  const rec = RECS.find(r => r.id===id);
+  if (!rec) return;
+  if (btn.dataset.act === 'edit') {
+    openEdit(rec);
+  } else if (btn.dataset.act === 'del') {
+    if (btn.dataset.confirm) {
+      const res = await api('/api/records/'+id, { method:'DELETE' });
+      if (res.ok) { toast('已删除','ok'); refreshAll(); }
+      else { toast('删除失败','err'); }
+    } else {
+      btn.dataset.confirm = '1';
+      btn.textContent = '确认?';
+      setTimeout(() => { delete btn.dataset.confirm; btn.textContent='删'; }, 2500);
+    }
+  }
+});
+
+// ---- 筛选 ----
+$$('#filters button').forEach(b => {
+  b.addEventListener('click', () => {
+    $$('#filters button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    F.kind = b.dataset.kind;
+    renderRecords();
+  });
+});
+
+// ---- 导出 ----
+$('#btnExportJson').addEventListener('click', () => window.open('/api/export?format=json'));
+$('#btnExportCsv').addEventListener('click', () => window.open('/api/export?format=csv'));
+
+// ---- 快捷键 ----
+document.addEventListener('keydown', e => {
+  if (e.target.matches('input,textarea,select')) return;
+  if (e.code === 'Space') { e.preventDefault(); S.running ? pauseTimer() : startTimer(); }
+  if (e.key === 'r' || e.key === 'R') { resetTimer(); }
+  if (e.key === 'e' || e.key === 'E') { endSession(); }
+});
+
+// ---- 任务列表 ----
+function updateTaskList() {
+  const tasks = [...new Set(RECS.map(r => r.task).filter(Boolean))].slice(0,20);
+  $('#taskList').innerHTML = tasks.map(t => '<option value="'+escapeHtml(t)+'">').join('');
+}
+
+// ---- 可见性 ----
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { visibilityHidden = true; }
+  else if (visibilityHidden) { refreshAll(); visibilityHidden = false; }
+});
+
+// ---- 设置事件绑定 ----
+function bindEvents() {
+  // 模式切换
+  $$('#modeTabs button').forEach(b => {
+    b.addEventListener('click', () => switchMode(b.dataset.mode));
+  });
+  // 开始/暂停
+  $('#btnStart').addEventListener('click', startTimer);
+  $('#btnPause').addEventListener('click', pauseTimer);
+  $('#btnReset').addEventListener('click', resetTimer);
+  $('#btnEnd').addEventListener('click', endSession);
+  // 预设
+  $$('#presets button[data-min]').forEach(b => {
+    b.addEventListener('click', () => {
+      S.durations.focus = +b.dataset.min;
+      saveSettings();
+      if (S.mode==='focus') resetTimer();
+      render();
+    });
+  });
+  // 自定义
+  $('#btnCustom').addEventListener('click', () => {
+    $('#cuFocus').value = S.durations.focus;
+    $('#cuShort').value = S.durations.short;
+    $('#cuLong').value = S.durations.long;
+    openModal('customModal');
+  });
+  $('#cuSave').addEventListener('click', () => {
+    const f = parseInt($('#cuFocus').value) || 25;
+    const s = parseInt($('#cuShort').value) || 5;
+    const l = parseInt($('#cuLong').value) || 15;
+    S.durations = { focus: Math.max(1,Math.min(600,f)), short: Math.max(1,Math.min(120,s)), long: Math.max(1,Math.min(180,l)) };
+    saveSettings();
+    if (S.mode==='focus') resetTimer();
+    render();
+    toast('已设置自定义时长','ok');
+    closeModal('customModal');
+  });
+  $('#cuCancel').addEventListener('click', () => closeModal('customModal'));
+  // 选项
+  ['autoShort','autoFocus','sound','notify'].forEach(key => {
+    const el = $('#opt'+key[0].toUpperCase()+key.slice(1));
+    if (el) {
+      el.checked = S.opts[key];
+      el.addEventListener('change', () => {
+        S.opts[key] = el.checked;
+        saveSettings();
+      });
+    }
+  });
+  // 结算按钮
+  $('#btnDone').addEventListener('click', recordDone);
+  $('#btnSkip').addEventListener('click', recordSkip);
+  $('#btnAbandon').addEventListener('click', recordAbandon);
+  $('#abConfirm').addEventListener('click', () => {
+    const reason = $('#abReason').value.trim();
+    if (!reason) { $('#abReason').focus(); toast('请填写放弃原因','warn'); return; }
+    saveRecord('abandon', PENDING.planned, PENDING.elapsedMin, reason);
+  });
+  $('#abCancel').addEventListener('click', () => { closeModal('abandonModal'); openEndModal(PENDING.early); });
+  // 编辑保存
+  $('#eSave').addEventListener('click', saveEdit);
+  $('#eCancel').addEventListener('click', () => closeModal('editModal'));
+  $('#eDelete').addEventListener('click', deleteEdit);
+  // 刷新
+  $('#btnRefresh').addEventListener('click', refreshAll);
+}
+
+// ---- 启动 ----
+bindEvents();
+render();
+refreshAll();
+// 每 5 分钟自动刷新（后台静默）
+setInterval(() => { if (!document.hidden) refreshAll(); }, 300000);
+
+console.log('DLPromo · ТОМАТО-ЧАСЫ 已启动');
+</script>
+</body>
+</html>
