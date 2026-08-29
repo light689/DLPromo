@@ -377,14 +377,16 @@ function onTimerEnd() {
   render();
   syncWakeLock();
   if (S.mode === 'focus') {
-    closeFS();
     playWhistle();
     notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已完成，自动入账');
+    // 横屏全屏 + 开启自动休息：保持全屏直接接休息，不退回竖屏
+    if (!(fsActive && S.opts.autoShort)) closeFS();
     autoSettleDone();
   } else {
-    closeFS();
     playWhistle();
     notify('休息结束', '准备开始下一轮专注');
+    // 横屏全屏 + 开启自动专注：保持全屏直接接专注，不退回竖屏
+    if (!(fsActive && S.opts.autoFocus)) closeFS();
     S.mode = 'focus'; resetTimer();
     if (S.opts.autoFocus) startTimer();
   }
