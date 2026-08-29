@@ -782,14 +782,18 @@ function dtFromLocal(v) {  // datetime-local value -> "YYYY-MM-DD HH:MM:00"
   return r.length===16 ? r+':00' : r;
 }
 
+function focusInProgress() {
+  return S && S.mode === 'focus' && S.startedAt;
+}
+
 // 页面切出（hidden）时调用
 function onPageHidden() {
-  if (exiting) return;                     // 退出模式：不记录
-  if (S.mode !== 'focus') {                // 非专注：只提示，不计历史
+  if (exiting) return;
+  if (!focusInProgress()) {              // 未开始专注 / 休息阶段：只标记提示
     quitThisHide = true;
     return;
   }
-  if (S.running) pauseTimer();             // 专注切出：默认暂停
+  if (S.running) pauseTimer();           // 专注切出：默认暂停
   // 冷却：1 分钟内最多 1 次，且未填理由期间不再新增
   const now = Date.now();
   const hasPending = !!localStorage.getItem(PENDING_QUIT_KEY);
@@ -815,7 +819,10 @@ function onPageVisible() {
   refreshAll();
   if (!quitThisHide) return;
   quitThisHide = false;
-  if (S.mode !== 'focus') { toast('已切出（休息时段，不记录）','warn'); return; }
+  if (!focusInProgress()) {
+    toast('检测到切出（未开始计时 / 休息，不记录）','warn');
+    return;
+  }
   showBackModal();
 }
 

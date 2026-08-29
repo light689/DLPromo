@@ -591,6 +591,7 @@ tr:hover { background:rgba(224,31,38,.10); }
   display:flex; align-items:center; justify-content:center; z-index:100; padding:12px;
   opacity:0; visibility:hidden; pointer-events:none; transition: opacity .22s ease, visibility .22s;
 }
+.modal.above { z-index:120; }
 .modal.open { opacity:1; visibility:visible; pointer-events:auto; }
 .modal-panel {
   background: var(--glass);
