@@ -11,6 +11,26 @@
 </head>
 <body data-mode="focus">
 
+<!-- 启动页 -->
+<div class="boot" id="bootLayer">
+  <div class="boot-panel">
+    <div class="boot-mark"><span class="sq red"></span><span class="sq yellow"></span><span class="sq black"></span></div>
+    <div class="boot-title">DLPromo</div>
+    <div class="boot-sub">番茄专注时钟 · ТОМАТО-ЧАСЫ</div>
+    <div class="boot-slogan">专注即生产 · 时间即材料 · 记录即档案</div>
+    <button class="btn btn-red big" id="bootEnter">进入番茄钟</button>
+    <div class="boot-tip">进入后请保持页面在前台，专注计时期间切出将被记录</div>
+  </div>
+</div>
+
+<!-- 退出黑屏层（老式关机） -->
+<div class="shutdown" id="shutdownLayer">
+  <div class="shutdown-box">
+    <div class="shutdown-title">DLPromo</div>
+    <div class="shutdown-line">Now can safely close this<br>DLPromo session.</div>
+    <div class="shutdown-tip">— 点击任意位置返回 —</div>
+  </div>
+</div>
 
 <!-- 装饰（构成主义 × 亚克力底座） -->
 <div class="deco">
@@ -41,8 +61,10 @@
     <div class="chip"><span class="chip-l">今日</span><b id="chipToday">0m</b></div>
     <div class="chip"><span class="chip-l">本周</span><b id="chipWeek">0m</b></div>
     <div class="chip"><span class="chip-l">总计</span><b id="chipTotal">0m</b></div>
+    <div class="chip chip-focus" title="今日累计离开页面 / 切后台次数"><span class="chip-l">切出</span><b id="chipQuit">0次</b></div>
   </div>
   <span class="net" id="netState">在线</span>
+  <button class="btn btn-sm btn-ghost" id="btnQuit" title="安全退出：不会记为切出">退出</button>
 </header>
 
 <!-- 主网格 -->
@@ -108,6 +130,19 @@
       <div class="hm-foot">
         <div class="legend">少 <span data-l="0"></span><span data-l="1"></span><span data-l="2"></span><span data-l="3"></span><span data-l="4"></span><span data-l="5"></span> 多</div>
         <div class="hm-info" id="hmInfo"></div>
+      </div>
+    </section>
+
+    <!-- 切出热力图（红色） -->
+    <section class="panel">
+      <div class="panel-head"><span class="ph-sq red"></span> 切出热力图 // КАРТА ПЕРЕРЫВОВ <span class="head-acts"><button class="btn btn-sm btn-ghost" id="quitHmRefresh">⟳</button></span></div>
+      <div class="hm-box">
+        <div class="hm-days"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
+        <div class="hm-cols" id="quitHmCols"></div>
+      </div>
+      <div class="hm-foot">
+        <div class="legend q-legend">少 <span data-l="0"></span><span data-l="1"></span><span data-l="2"></span><span data-l="3"></span><span data-l="4"></span><span data-l="5"></span> 多</div>
+        <div class="hm-info" id="quitHmInfo"></div>
       </div>
     </section>
 
@@ -259,6 +294,53 @@
   <div class="modal-panel">
     <div class="modal-top"><span id="dayTitle">—</span> <button class="x">✕</button></div>
     <div class="modal-body" id="dayBody"></div>
+  </div>
+</div>
+
+<!-- 切出回来激励模态框 -->
+<div class="modal" id="backModal">
+  <div class="modal-panel">
+    <div class="modal-top">欢迎回来 // С ВОЗВРАЩЕНИЕМ <button class="x">✕</button></div>
+    <div class="modal-body center">
+      <div class="end-title" id="backTitle">继续专注！</div>
+      <div class="end-desc" id="backDesc"></div>
+      <label class="back-reason">切出理由 <span class="opt">(选填)</span>
+        <textarea id="backReason" rows="2" placeholder="刚才为什么离开了？写下来，提醒自己保持专注…"></textarea>
+      </label>
+      <div class="end-acts">
+        <button class="btn btn-ghost big" id="btnBackSkip">先跳过</button>
+        <button class="btn btn-red big" id="btnBackFocus">保存并继续</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 删除切出记录理由 -->
+<div class="modal" id="delQuitModal">
+  <div class="modal-panel">
+    <div class="modal-top">删除记录 // УДАЛИТЬ <button class="x">✕</button></div>
+    <div class="modal-body center">
+      <div class="end-desc" id="delQuitInfo">删除理由（每日最多删除 3 次）</div>
+      <textarea id="delQuitReason" rows="2" placeholder="为什么删除？（如：误锁屏）" style="width:100%;padding:9px 10px;border:2px solid var(--ink);background:rgba(255,255,255,.5);font-size:15px;resize:vertical;"></textarea>
+      <div class="end-acts" style="justify-content:center;">
+        <button class="btn btn-ghost big" id="delQuitCancel">取消</button>
+        <button class="btn btn-red big" id="delQuitConfirm">确认删除</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 切出记录管理 -->
+<div class="modal" id="quitModal">
+  <div class="modal-panel">
+    <div class="modal-top">切出记录 // ПЕРЕРЫВЫ <button class="x">✕</button></div>
+    <div class="modal-body">
+      <div class="end-desc" id="quitHint">每次切出自动记录，可修改时间与理由。</div>
+      <div id="quitList"></div>
+      <div class="modal-acts">
+        <button class="btn btn-ghost" id="quitRefresh">刷新</button>
+      </div>
+    </div>
   </div>
 </div>
 

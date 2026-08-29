@@ -42,6 +42,7 @@ let PENDING = null;        // 待结算信息
 let editingId = null;      // 编辑中的记录 id
 let offline = false;       // 在线状态
 let visibilityHidden = false;
+let lastQuitTs = 0;
 let saving = false;        // 防止重复提交
 const TIMER_KEY = 'tomato_timer';
 const PENDING_KEY = 'pomo_pending';
@@ -326,6 +327,7 @@ function startTimer() {
   }
   saveTimerState();
   render();
+  syncWakeLock();
 }
 
 function pauseTimer() {
@@ -338,6 +340,7 @@ function pauseTimer() {
   S.running = false;
   saveTimerState();
   render();
+  syncWakeLock();
 }
 
 function resetTimer() {
@@ -349,6 +352,7 @@ function resetTimer() {
   S.segStart = null;
   saveTimerState();
   render();
+  syncWakeLock();
 }
 
 function switchMode(mode) {
@@ -370,6 +374,7 @@ function onTimerEnd() {
   S.running = false; S.remain = 0; S.acc = 0; S.segStart = null;
   saveTimerState();
   render();
+  syncWakeLock();
   if (S.mode === 'focus') {
     closeFS();
     playWhistle();
@@ -495,10 +500,11 @@ function afterRecord(kind) {
 
 // ---- 数据刷新 ----
 async function refreshAll() {
-  await Promise.all([loadRecords(), loadStats()]);
+  await Promise.all([loadRecords(), loadStats(), loadQuit()]);
   updateTaskList();
   render();
   flushQueue();
+  renderQuitHeatmap();
 }
 
 async function loadRecords() {
@@ -755,11 +761,243 @@ function updateTaskList() {
   $('#taskList').innerHTML = tasks.map(t => '<option value="'+escapeHtml(t)+'">').join('');
 }
 
+// ---- 切出检测（手机切后台 / 锁屏 / 离开页面） ----
+let quitThisHide = false;
+let exiting = false;                       // 退出模式：不记录切出
+let wakeLock = null;                       // Screen Wake Lock 句柄
+const PENDING_QUIT_KEY = 'pomo_pending_quit';
+const QUIT_COOLDOWN_MS = 60000;            // 切出冷却：1 分钟内最多 1 次
+
+function quitLocalNow() {
+  const d = new Date();
+  return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())
+    +' '+pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());
+}
+function fmtDTLocal(v) {   // "YYYY-MM-DD HH:MM:SS" -> datetime-local value
+  return v ? v.slice(0,10)+'T'+v.slice(11,16) : '';
+}
+function dtFromLocal(v) {  // datetime-local value -> "YYYY-MM-DD HH:MM:00"
+  if (!v) return '';
+  const r = v.replace('T',' ');
+  return r.length===16 ? r+':00' : r;
+}
+
+// 页面切出（hidden）时调用
+function onPageHidden() {
+  if (exiting) return;                     // 退出模式：不记录
+  if (S.mode !== 'focus') {                // 非专注：只提示，不计历史
+    quitThisHide = true;
+    return;
+  }
+  if (S.running) pauseTimer();             // 专注切出：默认暂停
+  // 冷却：1 分钟内最多 1 次，且未填理由期间不再新增
+  const now = Date.now();
+  const hasPending = !!localStorage.getItem(PENDING_QUIT_KEY);
+  if (now - lastQuitTs >= QUIT_COOLDOWN_MS && !hasPending) {
+    lastQuitTs = now;
+    try {
+      if (navigator.sendBeacon) navigator.sendBeacon('/api/quit');
+      else fetch('/api/quit', { method:'POST', keepalive:true }).catch(()=>{});
+    } catch(e) {}
+    localStorage.setItem(PENDING_QUIT_KEY, quitLocalNow());
+    const chip = $('#chipQuit');
+    if (chip) {
+      const n = (parseInt(chip.dataset.v||'0',10)||0)+1;
+      chip.dataset.v = n;
+      chip.textContent = n+'次';
+    }
+  }
+  quitThisHide = true;
+}
+
+// 页面回来（visible）时调用
+function onPageVisible() {
+  refreshAll();
+  if (!quitThisHide) return;
+  quitThisHide = false;
+  if (S.mode !== 'focus') { toast('已切出（休息时段，不记录）','warn'); return; }
+  showBackModal();
+}
+
+// 切出回来：弹窗激励 + 填理由（专注模式必须填理由）
+function showBackModal() {
+  const chip = $('#chipQuit');
+  const n = chip ? (parseInt(chip.dataset.v||'0',10)||0) : 0;
+  const t = S && S.running
+    ? '计时器还在运转，剩余 <b>'+fmtHM(Math.max(1,Math.round(S.remain/60)))+'</b>'
+    : '随时可以开始新的一轮';
+  let title, desc;
+  if (n <= 1) {
+    title = '欢迎回来！';
+    desc = '你刚刚切出了 <b>'+n+'</b> 次。专注的敌人是打断，坚持就是胜利！<br>'+t+'。';
+  } else if (n <= 3) {
+    title = '还在坚持！';
+    desc = '今日已切出 <b>'+n+'</b> 次，但你每次都回来了。韧性可嘉，继续！<br>'+t+'。';
+  } else {
+    title = '稳住节奏！';
+    desc = '今日已切出 <b>'+n+'</b> 次。每一次回归都是进步，深呼吸，回到当下。<br>'+t+'。';
+  }
+  $('#backTitle').textContent = title;
+  $('#backDesc').innerHTML = desc;
+  $('#backReason').value = '';
+  $('#btnBackSkip').style.display = 'none';   // 专注切出必须填理由
+  openModal('backModal');
+}
+
+// 保存切出理由：补到最近一条空理由记录，或新建一条（专注必须填）
+async function saveBackReason() {
+  const reason = $('#backReason').value.trim();
+  if (!reason) { $('#backReason').focus(); toast('专注切出必须填写理由','warn'); return; }
+  const quitAt = localStorage.getItem(PENDING_QUIT_KEY);
+  const list = await api('/api/quit_logs?limit=1');
+  let saved = false;
+  if (list.ok && list.data && list.data.length && !list.data[0].reason) {
+    const r = await api('/api/quit_logs/'+list.data[0].id, { method:'PATCH', body:{ reason, quit_at: quitAt } });
+    saved = !!(r && r.ok);
+  }
+  if (!saved) {
+    const body = { reason };
+    if (quitAt) body.quit_at = quitAt;
+    await api('/api/quit', { method:'POST', body });
+  }
+  localStorage.removeItem(PENDING_QUIT_KEY);
+  closeModal('backModal');
+  refreshAll();
+  toast('切出理由已记录','ok');
+}
+
+// ---- Screen Wake Lock（专注时屏幕常亮） ----
+async function requestWakeLock() {
+  if (!('wakeLock' in navigator) || wakeLock) return;
+  try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) { wakeLock = null; }
+}
+function releaseWakeLock() {
+  if (wakeLock) { try { wakeLock.release(); } catch(e) {} wakeLock = null; }
+}
+function syncWakeLock() {
+  if (S && S.mode === 'focus' && S.running) requestWakeLock();
+  else releaseWakeLock();
+}
+
+// ---- 退出功能（黑屏关机，不记录切出） ----
+function doQuit() {
+  exiting = true;
+  if (S && S.running) pauseTimer();
+  releaseWakeLock();
+  localStorage.removeItem(PENDING_QUIT_KEY);
+  $('#shutdownLayer').classList.add('open');
+}
+function cancelQuit() {
+  $('#shutdownLayer').classList.remove('open');
+  exiting = false;
+}
+
+// ---- 切出热力图（红色警示） ----
+function quitLevel(q) {
+  if (q<=0) return 0; if (q<=1) return 1; if (q<=3) return 2;
+  if (q<=6) return 3; if (q<=10) return 4; return 5;
+}
+async function renderQuitHeatmap() {
+  const tzo = new Date().getTimezoneOffset();
+  const j = await api('/api/session_meta?days=365&tz_offset='+(-tzo));
+  const box = $('#quitHmCols');
+  if (!j.ok || !box) return;
+  const items = j.data.items || [];
+  const map = {}; let sum=0;
+  items.forEach(d => { map[d.date]=d.quit_count; sum+=d.quit_count; });
+  const end = new Date(); end.setHours(0,0,0,0);
+  const start = new Date(end); start.setDate(end.getDate()-(items.length-1));
+  const dow = start.getDay(); if (dow!==0) start.setDate(start.getDate()-dow);
+  let prevMonth = -1, html = '';
+  for (let w=0;;w++) {
+    const ws = new Date(start); ws.setDate(start.getDate()+w*7);
+    if (ws > end) break;
+    const cells = [];
+    for (let i=0;i<7;i++) {
+      const dd = new Date(ws); dd.setDate(ws.getDate()+i);
+      const ds = fmtDate(dd);
+      const q = map[ds]||0;
+      const future = dd > end ? ' future' : '';
+      cells.push('<div class="hm-cell'+future+'" data-l="'+quitLevel(q)+'" data-date="'+ds+'" title="'+ds+' · 切出 '+q+' 次"></div>');
+    }
+    const m = ws.getMonth();
+    const label = (m!==prevMonth && ws.getDate()<=7) ? (m+1)+'月' : '';
+    prevMonth = m;
+    html += '<div class="hm-col">'+cells.join('')+'<div class="hm-ml">'+label+'</div></div>';
+  }
+  box.innerHTML = html;
+  const info = $('#quitHmInfo');
+  if (info) info.textContent = items.length+' 天 · 合计切出 '+sum+' 次';
+}
+
+async function loadQuit() {
+  const tzo = new Date().getTimezoneOffset();
+  const j = await api('/api/session_meta?days=1&tz_offset='+(-tzo));
+  if (j.ok && j.data.items && j.data.items[0]) {
+    const n = j.data.items[0].quit_count;
+    const chip = $('#chipQuit');
+    if (chip) { chip.dataset.v = n; chip.textContent = n+'次'; }
+  }
+}
+
+// ---- 切出记录管理（查看 / 编辑 / 删除） ----
+async function loadQuitList() {
+  const j = await api('/api/quit_logs?limit=200');
+  const box = $('#quitList');
+  if (!j.ok) { box.innerHTML = '<div class="end-desc">加载失败</div>'; return; }
+  const rows = j.data;
+  $('#quitHint').textContent = rows.length ? '共 '+j.total+' 条切出记录，可修改时间与理由。' : '还没有切出记录。';
+  box.innerHTML = rows.map(r => {
+    const dt = fmtDTLocal(r.quit_at);
+    return '<div class="quit-row" data-id="'+r.id+'">'
+      +'<div class="quit-fields">'
+      +'<input type="datetime-local" class="q-time" value="'+dt+'" aria-label="切出时间">'
+      +'<input type="text" class="q-reason" maxlength="200" value="'+escapeHtml(r.reason)+'" placeholder="切出理由">'
+      +'</div>'
+      +'<div class="quit-acts">'
+      +'<button class="btn btn-sm q-save">保存</button>'
+      +'<button class="btn btn-sm btn-ghost danger q-del">删除</button>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+  $$('.q-save', box).forEach(b => b.addEventListener('click', () => saveQuitRow(b)));
+  $$('.q-del', box).forEach(b => b.addEventListener('click', () => delQuitRow(b)));
+}
+
+async function saveQuitRow(btn) {
+  const row = btn.closest('.quit-row');
+  const id = row.dataset.id;
+  const quit_at = dtFromLocal($$('.q-time', row)[0].value);
+  const reason = $$('.q-reason', row)[0].value.trim();
+  const r = await api('/api/quit_logs/'+id, { method:'PATCH', body:{ quit_at, reason } });
+  if (r.ok) { toast('已保存','ok'); refreshAll(); loadQuitList(); }
+  else toast(r.error||'保存失败','err');
+}
+
+async function delQuitRow(btn) {
+  const row = btn.closest('.quit-row');
+  const id = row.dataset.id;
+  // 打开删除理由模态框
+  window._delQuitId = id;
+  $('#delQuitReason').value = '';
+  openModal('delQuitModal');
+}
+
 // ---- 可见性 / 生命周期 ----
 document.addEventListener('visibilitychange', () => {
-  if (document.hidden) { visibilityHidden = true; }
-  else if (visibilityHidden) { refreshAll(); visibilityHidden = false; }
+  if (document.hidden) {
+    visibilityHidden = true;
+    onPageHidden();
+  }
+  else if (visibilityHidden) {
+    visibilityHidden = false;
+    onPageVisible();
+  }
 });
+document.addEventListener('visibilitychange', releaseWakeLockOnHide);
+function releaseWakeLockOnHide() {
+  if (document.hidden && wakeLock) releaseWakeLock();
+}
 
 // 关闭/刷新页面：提醒未完成计时，并保存快照以便恢复
 window.addEventListener('beforeunload', e => {
@@ -851,6 +1089,40 @@ function bindEvents() {
     localStorage.removeItem(TIMER_KEY);
     resetTimer();
   });
+  // 切出回来：保存理由并继续 / 跳过
+  $('#btnBackFocus').addEventListener('click', saveBackReason);
+  $('#btnBackSkip').addEventListener('click', () => {
+    closeModal('backModal');
+    localStorage.removeItem(PENDING_QUIT_KEY);
+    render();
+    toast('欢迎回来，继续专注！','ok');
+  });
+  // 切出 chip：点击打开记录管理
+  $('#chipQuit').addEventListener('click', () => { loadQuitList(); openModal('quitModal'); });
+  $('#quitRefresh').addEventListener('click', loadQuitList);
+  // 启动页进入
+  $('#bootEnter').addEventListener('click', () => {
+    $('#bootLayer').classList.add('hide');
+    render();
+    refreshAll();
+  });
+  // 退出按钮（黑屏关机）
+  $('#btnQuit').addEventListener('click', doQuit);
+  // 退出黑屏点击恢复
+  $('#shutdownLayer').addEventListener('click', cancelQuit);
+  // 删除切出记录确认
+  $('#delQuitCancel').addEventListener('click', () => closeModal('delQuitModal'));
+  $('#delQuitConfirm').addEventListener('click', async () => {
+    const id = window._delQuitId;
+    const reason = $('#delQuitReason').value.trim();
+    if (!reason) { $('#delQuitReason').focus(); toast('请填写删除理由','warn'); return; }
+    const r = await api('/api/quit_logs/'+id, { method:'DELETE', body:{ reason } });
+    closeModal('delQuitModal');
+    if (r.ok) { toast('已删除','ok'); refreshAll(); loadQuitList(); }
+    else toast(r.error||'删除失败','err');
+  });
+  // 切出热力图刷新
+  $('#quitHmRefresh').addEventListener('click', renderQuitHeatmap);
 }
 
 // ---- 启动 ----

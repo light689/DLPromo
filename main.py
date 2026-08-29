@@ -32,7 +32,7 @@ DB_PATH = os.environ.get("DLPROMO_DB") or os.path.join(BASE_DIR, "pomodoro.db")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 KINDS = ("done", "skip", "abandon")
 MAX_DAYS = 730
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 4
 
 logging.basicConfig(
     level=logging.INFO,
@@ -74,13 +74,39 @@ def init_db() -> None:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_records_end ON records(end_at)")
+            # 切出记录：逐条明细（时间 + 理由），session_meta 降级为按天汇总缓存
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quit_logs (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    quit_at     TEXT    NOT NULL,              -- YYYY-MM-DD HH:MM:SS
+                    reason      TEXT    NOT NULL DEFAULT '',
+                    created_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime'))
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_quit_date ON quit_logs(quit_at)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS quit_deletes (
+                    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+                    quit_log_id INTEGER NOT NULL,
+                    reason      TEXT    NOT NULL,
+                    deleted_at  TEXT    NOT NULL DEFAULT (datetime('now','localtime')),
+                    date        TEXT    NOT NULL
+                )
+                """
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_quit_deletes_date ON quit_deletes(date)")
         ver = conn.execute("PRAGMA user_version").fetchone()[0]
         if ver == 0:
             with conn:
                 conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             log.info("初始化数据库 schema v%d", SCHEMA_VERSION)
         elif ver < SCHEMA_VERSION:
-            log.warning("数据库 schema v%d < 当前 v%d，尚无迁移，请备份后手动处理", ver, SCHEMA_VERSION)
+            log.info("数据库 schema v%d -> v%d，已应用幂等迁移", ver, SCHEMA_VERSION)
+            with conn:
+                conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
         else:
             log.info("数据库 schema v%d", ver)
     finally:
@@ -406,6 +432,171 @@ def export():
                     mimetype="application/json; charset=utf-8",
                     headers={"Content-Disposition":
                              "attachment; filename=pomodoro_records.json"})
+
+
+# ---------------------------------------------------------------- quit logs
+@app.post("/api/quit")
+def record_quit():
+    """
+    记录一次“切出”事件（手机切后台 / 锁屏 / 离开页面）。
+    写入逐条 quit_logs。
+    body: { "quit_at": "YYYY-MM-DD HH:MM:SS", "reason": "..." }  可选
+    缺省 quit_at 为服务器当前时间。
+    """
+    quit_at = ""
+    reason = ""
+    if request.is_json:
+        body = request.get_json() or {}
+        quit_at = str(body.get("quit_at") or "").strip()
+        reason = str(body.get("reason") or "").strip()[:500]
+    if not quit_at:
+        quit_at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    if parse_dt(quit_at) is None:
+        return jsonify(ok=False, error="quit_at 必须为 YYYY-MM-DD HH:MM:SS"), 400
+
+    conn = get_db()
+    try:
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO quit_logs (quit_at, reason) VALUES (?, ?)",
+                (quit_at, reason),
+            )
+            rid = cur.lastrowid
+        row = conn.execute(
+            "SELECT id, quit_at, reason, created_at FROM quit_logs WHERE id = ?", (rid,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return jsonify(ok=True, data=dict(row))
+
+
+@app.get("/api/quit_logs")
+def list_quit_logs():
+    """查询切出记录，倒序。?limit=&offset= 分页；?date=YYYY-MM-DD 按天过滤。"""
+    limit = min(max(request.args.get("limit", default=50, type=int), 1), 500)
+    offset = max(request.args.get("offset", default=0, type=int), 0)
+    date = str(request.args.get("date") or "").strip()
+    where = ""
+    params = []
+    if date:
+        where = "WHERE quit_at LIKE ?"
+        params.append(date + "%")
+    conn = get_db()
+    try:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM quit_logs {where}", params
+        ).fetchone()["c"]
+        rows = [dict(r) for r in conn.execute(
+            f"""SELECT id, quit_at, reason, created_at FROM quit_logs
+                {where} ORDER BY quit_at DESC, id DESC LIMIT ? OFFSET ?""",
+            params + [limit, offset],
+        ).fetchall()]
+    finally:
+        conn.close()
+    return jsonify(ok=True, data=rows, total=total)
+
+
+@app.patch("/api/quit_logs/<int:rid>")
+def edit_quit_log(rid):
+    """编辑一条切出记录：时间 / 理由。"""
+    body = request.get_json() or {}
+    quit_at = str(body.get("quit_at") or "").strip()
+    reason = str(body.get("reason") or "").strip()[:500]
+    if quit_at and parse_dt(quit_at) is None:
+        return jsonify(ok=False, error="quit_at 必须为 YYYY-MM-DD HH:MM:SS"), 400
+
+    fields, params = [], []
+    if quit_at:
+        fields.append("quit_at = ?")
+        params.append(quit_at)
+    if "reason" in body:
+        fields.append("reason = ?")
+        params.append(reason)
+    if not fields:
+        return jsonify(ok=False, error="没有可更新的字段"), 400
+
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute(
+                f"UPDATE quit_logs SET {', '.join(fields)} WHERE id = ?",
+                params + [rid],
+            )
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM quit_logs WHERE id = ?", (rid,)
+        ).fetchone()
+        if row["c"] == 0:
+            return jsonify(ok=False, error="记录不存在"), 404
+        updated = conn.execute(
+            "SELECT id, quit_at, reason, created_at FROM quit_logs WHERE id = ?", (rid,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return jsonify(ok=True, data=dict(updated))
+
+
+@app.delete("/api/quit_logs/<int:rid>")
+def delete_quit_log(rid):
+    """删除一条切出记录，需填写删除理由，每日限3次。"""
+    body = request.get_json() or {}
+    reason = str(body.get("reason") or "").strip()
+    if not reason:
+        return jsonify(ok=False, error="请填写删除理由"), 400
+    if len(reason) > 500:
+        reason = reason[:500]
+
+    today = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
+    conn = get_db()
+    try:
+        cnt = conn.execute(
+            "SELECT COUNT(*) AS c FROM quit_deletes WHERE date = ?", (today,)
+        ).fetchone()["c"]
+        if cnt >= 3:
+            return jsonify(ok=False, error="今日删除次数已达上限（3次）"), 429
+
+        row = conn.execute(
+            "SELECT id FROM quit_logs WHERE id = ?", (rid,)
+        ).fetchone()
+        if not row:
+            return jsonify(ok=False, error="记录不存在"), 404
+
+        with conn:
+            conn.execute(
+                "INSERT INTO quit_deletes (quit_log_id, reason, date) VALUES (?, ?, ?)",
+                (rid, reason, today)
+            )
+            conn.execute("DELETE FROM quit_logs WHERE id = ?", (rid,))
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@app.get("/api/session_meta")
+def get_session_meta():
+    """按天汇总切出次数（从 quit_logs 聚合）。?days=30 返回近 N 天。"""
+    days = request.args.get("days", default=1, type=int)
+    days = min(max(days, 1), 730)
+    tz_off = request.args.get("tz_offset", default=0, type=int)
+    now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=tz_off)
+    today = now.date()
+    since = today - datetime.timedelta(days=days - 1)
+    since_s = since.strftime("%Y-%m-%d") + " 00:00:00"
+
+    conn = get_db()
+    try:
+        rows = {r["d"]: r["c"] for r in conn.execute(
+            """SELECT substr(quit_at,1,10) AS d, COUNT(*) AS c
+               FROM quit_logs WHERE quit_at >= ? GROUP BY d""",
+            (since_s,),
+        ).fetchall()}
+    finally:
+        conn.close()
+
+    items = []
+    for i in range(days):
+        ds = (since + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
+        items.append({"date": ds, "quit_count": rows.get(ds, 0)})
+    return jsonify(ok=True, data={"days": days, "items": items})
 
 
 # ---------------------------------------------------------------- backup

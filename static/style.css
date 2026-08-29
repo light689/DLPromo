@@ -212,6 +212,10 @@ input[type="number"] { -moz-appearance:textfield; appearance:textfield; }
 @media (min-width: 720px) {
   .chip b { font-size:1.2rem; }
 }
+.chip-focus { border:1px dashed var(--yellow); }
+.chip-focus b { color:var(--yellow); }
+.chip-focus::before { background:var(--yellow); }
+.chip-focus .chip-l { opacity:1; }
 .net { align-self:flex-end; font-size:10px; border:1px solid var(--ink); padding:2px 6px; display:inline-flex; align-items:center; gap:5px; }
 .net::before { content:''; width:6px; height:6px; border-radius:50%; background:#0a8a4f; }
 @media (min-width: 720px) {
@@ -437,6 +441,60 @@ body.offline .net::before { background:var(--red); animation: blink 1.2s ease-in
 .hm-foot .legend span[data-l="4"] { background:#d91f26; }
 .hm-foot .legend span[data-l="5"] { background:#8c0d12; }
 
+/* ========== 切出热力图红色覆盖 ========== */
+#quitHmCols .hm-cell:not(.future) { background: #fcd0d0; }
+#quitHmCols .hm-cell:not(.future)[data-l="1"] { background: #f8b0b0; }
+#quitHmCols .hm-cell:not(.future)[data-l="2"] { background: #f08080; }
+#quitHmCols .hm-cell:not(.future)[data-l="3"] { background: #e05050; }
+#quitHmCols .hm-cell:not(.future)[data-l="4"] { background: #c02020; }
+#quitHmCols .hm-cell:not(.future)[data-l="5"] { background: #800000; }
+
+.q-legend [data-l="0"] { background: #fcd0d0; }
+.q-legend [data-l="1"] { background: #f8b0b0; }
+.q-legend [data-l="2"] { background: #f08080; }
+.q-legend [data-l="3"] { background: #e05050; }
+.q-legend [data-l="4"] { background: #c02020; }
+.q-legend [data-l="5"] { background: #800000; }
+
+/* ========== 启动页 ========== */
+.boot {
+  position:fixed; inset:0; z-index:999;
+  display:flex; align-items:center; justify-content:center;
+  background: rgba(17,17,17,.96);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  transition: opacity .5s ease, visibility .5s;
+}
+.boot.hide { opacity:0; visibility:hidden; pointer-events:none; }
+.boot-panel {
+  text-align:center; max-width:420px; padding:30px 24px;
+  background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter:blur(12px);
+}
+.boot-mark { display:flex; justify-content:center; gap:8px; margin-bottom:12px; }
+.boot-mark .sq { width:28px; height:28px; display:inline-block; border-radius:2px; }
+.boot-mark .sq.red { background:var(--red); }
+.boot-mark .sq.yellow { background:var(--yellow); }
+.boot-mark .sq.black { background:var(--ink); }
+.boot-title { font-size:2.8rem; font-weight:900; letter-spacing:6px; color:#fff; }
+.boot-sub { font-size:1.1rem; letter-spacing:4px; color:rgba(255,255,255,.6); margin:6px 0 12px; }
+.boot-slogan { font-size:.85rem; color:rgba(255,255,255,.35); letter-spacing:1.5px; margin-bottom:18px; }
+.boot-tip { font-size:.7rem; color:rgba(255,255,255,.25); margin-top:14px; letter-spacing:1px; }
+
+/* ========== 退出黑屏（老式关机） ========== */
+.shutdown {
+  position:fixed; inset:0; z-index:1000;
+  background:#000; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; visibility:hidden;
+  transition: opacity .4s ease, visibility .4s;
+  cursor:pointer;
+}
+.shutdown.open { opacity:1; visibility:visible; }
+.shutdown-box { text-align:center; max-width:480px; padding:20px; }
+.shutdown-title { font-size:2.2rem; font-weight:900; letter-spacing:8px; color:rgba(255,255,255,.6); margin-bottom:20px; }
+.shutdown-line { font-size:1.3rem; letter-spacing:2px; color:rgba(255,255,255,.7); line-height:1.6; }
+.shutdown-tip { font-size:.8rem; color:rgba(255,255,255,.25); margin-top:28px; letter-spacing:3px; }
+
 /* ========== 统计 ========== */
 .stats-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:4px; }
 @media (min-width: 720px) {
@@ -627,6 +685,28 @@ tr:hover { background:rgba(224,31,38,.10); }
 .day-task { flex:1; font-size:12px; }
 .day-time { font-size:10px; color:var(--gray); }
 .day-min { font-weight:900; font-size:12px; min-width:35px; text-align:right; }
+
+/* ========== 切出理由 / 切出记录管理 ========== */
+.back-reason { display:block; text-align:left; margin:10px 0 4px; font-size:11px; letter-spacing:1px; color:var(--gray); }
+.back-reason .opt{ opacity:.7; }
+.back-reason textarea {
+  display:block; width:100%; margin-top:4px; padding:9px 10px; border:2px solid var(--ink);
+  background:rgba(255,255,255,.5); font-size:15px; resize:vertical; border-radius:0;
+}
+.quit-row { display:flex; flex-direction:column; gap:6px; padding:10px 0; border-bottom:1px solid rgba(17,17,17,.12); }
+.quit-row:last-child{ border:none; }
+.quit-fields { display:flex; flex-direction:column; gap:6px; }
+@media (min-width: 720px) {
+  .quit-fields { flex-direction:row; gap:8px; }
+}
+.quit-fields input { padding:8px 9px; border:2px solid var(--ink); background:rgba(255,255,255,.5); font-size:14px; }
+.quit-fields .q-time { width:100%; }
+.quit-fields .q-reason { width:100%; }
+@media (min-width: 720px) {
+  .quit-fields .q-time { width:205px; flex:none; }
+  .quit-fields .q-reason { flex:1; }
+}
+.quit-acts { display:flex; gap:6px; justify-content:flex-end; }
 
 /* ========== Toast（亚克力） ========== */
 #toasts { position:fixed; bottom:calc(10px + var(--safe-b,0px)); right:10px; left:10px; z-index:200; display:flex; flex-direction:column; gap:6px; max-width:100%; }
