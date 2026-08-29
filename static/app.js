@@ -29,7 +29,7 @@ function level(min) {
 // ---- 状态 ----
 const DEFAULTS = {
   durations: { focus:25, short:5, long:15 },
-  opts: { autoShort:false, autoFocus:false, sound:true, notify:false }
+  opts: { autoShort:false, autoFocus:false, sound:true, notify:false, longEvery:4 }
 };
 let S = null;              // 计时器状态
 let RECS = [];             // 已加载记录
@@ -244,9 +244,10 @@ function render() {
     $('#btnStart').textContent = '继续';
   }
   document.title = pad(m)+':'+pad(s)+' · '+(S.mode==='focus'?'专注':'休息')+' | ТОМАТО';
-  const r = S.round % 4;
-  const disp = S.round===0 ? 0 : (r===0?4:r);
-  $('#cycleLabel').textContent = '本轮 '+disp+' / 4 个番茄';
+  const every = Math.max(1, S.opts.longEvery||4);
+  const r = S.round % every;
+  const disp = S.round===0 ? 0 : (r===0?every:r);
+  $('#cycleLabel').textContent = '本轮 '+disp+' / '+every+' 个番茄';
   // 更新预设按钮状态
   $$('#presets button[data-min]').forEach(b => {
     b.classList.toggle('active', +b.dataset.min === S.durations.focus);
@@ -488,7 +489,8 @@ function afterRecord(kind) {
   S.acc = 0;
   S.segStart = null;
   if (kind !== 'abandon') S.round++;
-  const isLong = S.round>0 && S.round%4===0;
+  const every = Math.max(1, S.opts.longEvery||4);
+  const isLong = S.round>0 && S.round%every===0;
   S.mode = kind==='abandon' ? 'short' : (isLong ? 'long' : 'short');
   S.total = S.durations[S.mode]*60;
   S.remain = S.total;
@@ -1040,6 +1042,7 @@ function bindEvents() {
     $('#cuFocus').value = S.durations.focus;
     $('#cuShort').value = S.durations.short;
     $('#cuLong').value = S.durations.long;
+    $('#cuLongEvery').value = S.opts.longEvery||4;
     openModal('customModal');
   });
   $('#cuSave').addEventListener('click', () => {
@@ -1047,6 +1050,7 @@ function bindEvents() {
     const s = parseInt($('#cuShort').value) || 5;
     const l = parseInt($('#cuLong').value) || 15;
     S.durations = { focus: Math.max(1,Math.min(600,f)), short: Math.max(1,Math.min(120,s)), long: Math.max(1,Math.min(180,l)) };
+    S.opts.longEvery = Math.max(1, Math.min(12, parseInt($('#cuLongEvery').value) || 4));
     saveSettings();
     if (S.mode==='focus') resetTimer();
     render();
