@@ -107,9 +107,9 @@ function maybeResume() {
   }
   saveSettings();
   if (S.remain <= 0) {
-    // 离开期间已到期：专注则进入结算，休息则直接重置
+    // 离开期间已到期：专注则自动入账，休息则直接重置
     localStorage.removeItem(TIMER_KEY);
-    if (S.mode === 'focus') { S.running = false; render(); openEndModal(false); }
+    if (S.mode === 'focus') { S.running = false; render(); autoSettleDone(); }
     else { S.mode = 'focus'; resetTimer(); }
     return;
   }
@@ -379,8 +379,8 @@ function onTimerEnd() {
   if (S.mode === 'focus') {
     closeFS();
     playWhistle();
-    notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已到，请结算');
-    openEndModal(false);
+    notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已完成，自动入账');
+    autoSettleDone();
   } else {
     closeFS();
     playWhistle();
@@ -390,9 +390,15 @@ function onTimerEnd() {
   }
 }
 
+// 专注自然结束：自动入账并跳转休息
+function autoSettleDone() {
+  const planned = S.durations.focus;
+  saveRecord('done', planned, planned, '');
+}
+
 function endSession() {
   if (S.mode !== 'focus') return;
-  if (S.remain <= 0 && !S.running) { closeFS(); openEndModal(false); return; }
+  if (S.remain <= 0 && !S.running) { closeFS(); autoSettleDone(); return; }
   if (!S.startedAt) { toast('还没有开始计时','warn'); return; }
   pauseTimer();
   closeFS();
