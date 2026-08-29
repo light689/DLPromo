@@ -410,11 +410,16 @@ function openEndModal(early) {
   $('#endTitle').textContent = early ? '提前结束 // РАНО' : '计时结束 // ГОТОВО';
   $('#endDesc').innerHTML = early
     ? '本轮计划 <b>'+planned+'</b> 分钟 · 已实际专注 <b>'+elapsedMin+'</b> 分钟<br>请选择结算方式：'
-    : '本轮 <b>'+planned+'</b> 分钟已到，请结算：';
+    : '本轮 <b>'+planned+'</b> 分钟已完成，专注入账。';
+  // 自然结束：只显示完成；提前结束：显示跳过+放弃，隐藏完成
   $('#btnDone').style.display = early ? 'none' : '';
+  $('#btnSkip').style.display = early ? '' : 'none';
+  $('#btnAbandon').style.display = early ? '' : 'none';
   $('#btnDone').textContent = '完成 · 入账 '+planned+' 分钟';
   $('#btnSkip').textContent = '跳过 · 按 '+planned+' 分钟入账';
   $('#btnAbandon').textContent = '放弃 · 不计入总时长';
+  const notes = $('#endModal .end-notes');
+  if (notes) notes.style.display = early ? '' : 'none';
   openModal('endModal');
 }
 
