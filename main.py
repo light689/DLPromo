@@ -32,7 +32,7 @@ DB_PATH = os.environ.get("DLPROMO_DB") or os.path.join(BASE_DIR, "pomodoro.db")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 KINDS = ("done", "skip", "abandon")
 MAX_DAYS = 730
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 logging.basicConfig(
     level=logging.INFO,
@@ -64,8 +64,8 @@ def init_db() -> None:
                     id              INTEGER PRIMARY KEY AUTOINCREMENT,
                     kind            TEXT    NOT NULL CHECK (kind IN ('done','skip','abandon')),
                     task            TEXT    NOT NULL DEFAULT '',
-                    planned_minutes INTEGER NOT NULL DEFAULT 0,
-                    actual_minutes  INTEGER NOT NULL DEFAULT 0,
+                    planned_minutes REAL    NOT NULL DEFAULT 0,
+                    actual_minutes  REAL    NOT NULL DEFAULT 0,
                     reason          TEXT    NOT NULL DEFAULT '',
                     start_at        TEXT    NOT NULL,
                     end_at          TEXT    NOT NULL,
@@ -117,12 +117,12 @@ init_db()
 
 
 # ---------------------------------------------------------------- utils
-def to_int(v: Any, default: Optional[int] = None) -> Optional[int]:
-    """安全转整数，返回 None 表示无效。"""
+def to_int(v: Any, default: Optional[float] = None) -> Optional[float]:
+    """安全转数字（支持小数分钟），返回 None 表示无效。"""
     if v is None or v == "":
         return default
     try:
-        return int(v)
+        return float(v)
     except (TypeError, ValueError):
         return None
 
@@ -152,7 +152,7 @@ def validate_payload(p: dict) -> tuple[Optional[dict], Optional[str]]:
     if "actual_minutes" in p and p.get("actual_minutes") != "":
         actual = to_int(p.get("actual_minutes"), 0)
         if actual is None:
-            return None, "actual_minutes 必须是整数"
+            return None, "actual_minutes 必须是数字"
         actual = max(0, actual)
     else:
         actual = planned if kind != "abandon" else 0

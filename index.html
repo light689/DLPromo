@@ -105,7 +105,6 @@
     <div class="controls">
       <button class="btn btn-red big" id="btnStart">开始</button>
       <button class="btn btn-black big" id="btnPause" style="display:none">暂停</button>
-      <button class="btn btn-yellow" id="btnReset">重置</button>
       <button class="btn btn-ghost" id="btnEnd">结束</button>
     </div>
     <div class="opts">
@@ -114,7 +113,7 @@
       <label><input type="checkbox" id="optSound" checked> 提示音</label>
       <label><input type="checkbox" id="optNotify"> 系统通知</label>
     </div>
-    <div class="kbd-hint">快捷键：空格=开始/暂停 · R=重置 · E=结束</div>
+    <div class="kbd-hint">快捷键：空格=开始/暂停 · E=结束</div>
   </section>
 
   <!-- 右：热力图 + 统计 + 记录 -->
@@ -240,8 +239,8 @@
             <option value="abandon">放弃</option>
           </select>
         </label>
-        <label>计划时长(分)<input type="number" id="ePlanned" min="1" max="600"></label>
-        <label>实际时长(分)<input type="number" id="eActual" min="1" max="600"></label>
+        <label>计划时长(分)<input type="number" id="ePlanned" min="1" max="600" step="0.1"></label>
+        <label>实际时长(分)<input type="number" id="eActual" min="1" max="600" step="0.1"></label>
         <label>任务<input type="text" id="eTask" maxlength="200"></label>
         <label>开始时间<input type="datetime-local" id="eStart"></label>
         <label>结束时间<input type="datetime-local" id="eEnd"></label>
@@ -262,7 +261,12 @@
     <div class="modal-top">自定义时长 // НАСТРОЙКА <button class="x">✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
-        <label>专注(分)<input type="number" id="cuFocus" min="1" max="600"></label>
+        <label>专注时长
+          <span class="dur-split">
+            <input type="number" id="cuFocusMin" min="1" max="599" value="25">分
+            <input type="number" id="cuFocusSec" min="0" max="59" value="0">秒
+          </span>
+        </label>
         <label>短休(分)<input type="number" id="cuShort" min="1" max="120"></label>
         <label>长休(分)<input type="number" id="cuLong" min="1" max="180"></label>
         <label>长休间隔<input type="number" id="cuLongEvery" min="1" max="12"></label>
@@ -298,18 +302,17 @@
   </div>
 </div>
 
-<!-- 切出回来激励模态框 -->
-<div class="modal" id="backModal">
+<!-- 切出回来激励模态框（不可关闭，必须填理由） -->
+<div class="modal" id="backModal" data-locked="true">
   <div class="modal-panel">
-    <div class="modal-top">欢迎回来 // С ВОЗВРАЩЕНИЕМ <button class="x">✕</button></div>
+    <div class="modal-top">欢迎回来 // С ВОЗВРАЩЕНИЕМ</div>
     <div class="modal-body center">
       <div class="end-title" id="backTitle">继续专注！</div>
       <div class="end-desc" id="backDesc"></div>
-      <label class="back-reason">切出理由 <span class="opt">(选填)</span>
+      <label class="back-reason">切出理由 <span class="need">(必填)</span>
         <textarea id="backReason" rows="2" placeholder="刚才为什么离开了？写下来，提醒自己保持专注…"></textarea>
       </label>
       <div class="end-acts">
-        <button class="btn btn-ghost big" id="btnBackSkip">先跳过</button>
         <button class="btn btn-red big" id="btnBackFocus">保存并继续</button>
       </div>
     </div>

@@ -21,6 +21,11 @@ function fmtHM(m) {
   const h = Math.floor(m/60), n = m%60;
   return h>0 ? h+'h'+n+'m' : n+'m';
 }
+function fmtSec(s) {
+  const m = Math.floor(s/60), r = Math.round(s%60);
+  if (r === 60) { return fmtSec((m+1)*60); }
+  return m>0 ? (r>0 ? m+'分'+r+'秒' : m+'分钟') : r+'秒';
+}
 function level(min) {
   if (min<=0) return 0; if (min<25) return 1; if (min<50) return 2;
   if (min<100) return 3; if (min<200) return 4; return 5;
@@ -28,7 +33,7 @@ function level(min) {
 
 // ---- 状态 ----
 const DEFAULTS = {
-  durations: { focus:25, short:5, long:15 },
+  durations: { focus: 1500, short: 300, long: 900 },
   opts: { autoShort:false, autoFocus:false, sound:true, notify:false, longEvery:4 }
 };
 let S = null;              // 计时器状态
@@ -50,12 +55,16 @@ const PENDING_KEY = 'pomo_pending';
 function initState() {
   const saved = JSON.parse(localStorage.getItem('tomato_settings') || '{}');
   const dur = Object.assign({}, DEFAULTS.durations, saved.durations);
+  // 旧版本以分钟存储，迁移为秒
+  if (dur.focus < 60) dur.focus *= 60;
+  if (dur.short < 60) dur.short *= 60;
+  if (dur.long < 60) dur.long *= 60;
   const opts = Object.assign({}, DEFAULTS.opts, saved.opts);
   S = {
     mode: 'focus',
     running: false,
-    total: dur.focus*60,
-    remain: dur.focus*60,
+    total: dur.focus,
+    remain: dur.focus,
     endAt: 0,
     tickId: null,
     startedAt: null,
@@ -96,7 +105,7 @@ function maybeResume() {
   try { snap = JSON.parse(raw); } catch(e) { localStorage.removeItem(TIMER_KEY); return; }
   if (!snap || !snap.startedAt) return;
   S.mode = snap.mode || 'focus';
-  S.total = snap.total || S.durations[S.mode]*60;
+  S.total = snap.total || S.durations[S.mode];
   S.remain = snap.remain;
   S.acc = snap.acc || 0;
   S.round = snap.round || 0;
@@ -158,7 +167,7 @@ function toast(msg, type='ok') {
 function openModal(id) { $('#'+id).classList.add('open'); }
 function closeModal(id) { $('#'+id).classList.remove('open'); }
 $$('.modal').forEach(m => {
-  m.addEventListener('click', e => { if (e.target===m) closeModal(m.id); });
+  m.addEventListener('click', e => { if (e.target===m && !m.dataset.locked) closeModal(m.id); });
 });
 $$('.modal .x').forEach(x => {
   x.addEventListener('click', () => closeModal(x.closest('.modal').id));
@@ -250,7 +259,7 @@ function render() {
   $('#cycleLabel').textContent = '本轮 '+disp+' / '+every+' 个番茄';
   // 更新预设按钮状态
   $$('#presets button[data-min]').forEach(b => {
-    b.classList.toggle('active', +b.dataset.min === S.durations.focus);
+    b.classList.toggle('active', +b.dataset.min*60 === S.durations.focus);
   });
   // 模式标签
   $$('#modeTabs button').forEach(b => {
@@ -314,7 +323,7 @@ function tick() {
 function startTimer() {
   if (S.running) return;
   if (S.remain <= 0) {
-    S.total = S.durations[S.mode]*60;
+S.total = S.durations[S.mode];
     S.remain = S.total;
   }
   S.running = true;
@@ -379,7 +388,7 @@ function onTimerEnd() {
   if (S.mode === 'focus') {
     closeFS();
     playWhistle();
-    notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已到，请结算');
+    notify('番茄结束', '本轮 '+fmtSec(S.durations.focus)+' 已到，请结算');
     openEndModal(false);
   } else {
     closeFS();
@@ -401,22 +410,23 @@ function endSession() {
 
 // ---- 结算 ----
 function openEndModal(early) {
-  const planned = S.durations.focus;
-  let elapsedMin = planned;
+  const plannedSec = S.durations.focus;
+  let elapsedMin = plannedSec/60;
   if (early && S.startedAt) {
-    elapsedMin = Math.max(1, Math.round(actualElapsedSeconds()/60));
+    elapsedMin = Math.max(0.016, actualElapsedSeconds()/60);
   }
-  PENDING = { early, planned, elapsedMin: elapsedMin || planned };
+  PENDING = { early, plannedSec, planned: Math.round(plannedSec/60*10)/10, elapsedMin: elapsedMin || plannedSec/60 };
+  const pl = PENDING.planned, el = Math.round(PENDING.elapsedMin*10)/10;
   $('#endTitle').textContent = early ? '提前结束 // РАНО' : '计时结束 // ГОТОВО';
   $('#endDesc').innerHTML = early
-    ? '本轮计划 <b>'+planned+'</b> 分钟 · 已实际专注 <b>'+elapsedMin+'</b> 分钟<br>请选择结算方式：'
-    : '本轮 <b>'+planned+'</b> 分钟已完成，专注入账。';
+    ? '本轮计划 <b>'+fmtSec(plannedSec)+'</b> · 已实际专注 <b>'+el+'</b> 分钟<br>请选择结算方式：'
+    : '本轮 <b>'+fmtSec(plannedSec)+'</b> 已完成，专注入账。';
   // 自然结束：只显示完成；提前结束：显示跳过+放弃，隐藏完成
   $('#btnDone').style.display = early ? 'none' : '';
   $('#btnSkip').style.display = early ? '' : 'none';
   $('#btnAbandon').style.display = early ? '' : 'none';
-  $('#btnDone').textContent = '完成 · 入账 '+planned+' 分钟';
-  $('#btnSkip').textContent = '跳过 · 按 '+planned+' 分钟入账';
+  $('#btnDone').textContent = '完成 · 入账 '+fmtSec(plannedSec);
+  $('#btnSkip').textContent = '跳过 · 按 '+fmtSec(plannedSec)+' 入账';
   $('#btnAbandon').textContent = '放弃 · 不计入总时长';
   const notes = $('#endModal .end-notes');
   if (notes) notes.style.display = early ? '' : 'none';
@@ -427,7 +437,7 @@ function recordDone() { saveRecord('done', PENDING.planned, PENDING.planned, '')
 function recordSkip() { saveRecord('skip', PENDING.planned, PENDING.planned, ''); }
 function recordAbandon() {
   closeModal('endModal');
-  $('#abInfo').innerHTML = '计划 <b>'+PENDING.planned+'</b> 分钟 · 实际专注 <b>'+PENDING.elapsedMin+'</b> 分钟<br><span style="color:var(--red)">不计入总专注时间</span>';
+  $('#abInfo').innerHTML = '计划 <b>'+fmtSec(PENDING.plannedSec)+'</b> · 实际专注 <b>'+Math.round(PENDING.elapsedMin*10)/10+'</b> 分钟<br><span style="color:var(--red)">不计入总专注时间</span>';
   $('#abReason').value = '';
   openModal('abandonModal');
 }
@@ -471,9 +481,9 @@ async function saveRecord(kind, planned, actual, reason) {
     const res = await api('/api/records', { method:'POST', body: payload });
     if (res && res.ok) {
       if (kind === 'abandon') {
-        toast('已记录放弃（'+actual+' 分钟，不计入总时长）','warn');
+        toast('已记录放弃（'+Math.round(actual*10)/10+' 分钟，不计入总时长）','warn');
       } else {
-        toast('已入账 '+planned+' 分钟专注','ok');
+        toast('已入账 '+fmtSec(PENDING.plannedSec)+' 专注','ok');
       }
       afterRecord(kind);
       refreshAll();
@@ -675,8 +685,8 @@ $('#ePlanned').addEventListener('input', () => {
 
 async function saveEdit() {
   const kind = $('#eKind').value;
-  const planned = parseInt($('#ePlanned').value) || 0;
-  const actual = parseInt($('#eActual').value) || planned;
+  const planned = parseFloat($('#ePlanned').value) || 0;
+  const actual = parseFloat($('#eActual').value) || planned;
   const task = $('#eTask').value.trim();
   const reason = $('#eReason').value.trim();
   const start = $('#eStart').value.replace('T',' ')+':00';
@@ -758,7 +768,6 @@ $('#btnExportCsv').addEventListener('click', () => window.open('/api/export?form
 document.addEventListener('keydown', e => {
   if (e.target.closest('input,textarea,select,button,a,[contenteditable="true"]')) return;
   if (e.code === 'Space') { e.preventDefault(); S.running ? pauseTimer() : startTimer(); }
-  if (e.key === 'r' || e.key === 'R') { resetTimer(); }
   if (e.key === 'e' || e.key === 'E') { endSession(); }
 });
 
@@ -854,7 +863,6 @@ function showBackModal() {
   $('#backTitle').textContent = title;
   $('#backDesc').innerHTML = desc;
   $('#backReason').value = '';
-  $('#btnBackSkip').style.display = 'none';   // 专注切出必须填理由
   openModal('backModal');
 }
 
@@ -1031,12 +1039,11 @@ function bindEvents() {
   // 开始/暂停
   $('#btnStart').addEventListener('click', startTimer);
   $('#btnPause').addEventListener('click', pauseTimer);
-  $('#btnReset').addEventListener('click', resetTimer);
   $('#btnEnd').addEventListener('click', endSession);
   // 预设
   $$('#presets button[data-min]').forEach(b => {
     b.addEventListener('click', () => {
-      S.durations.focus = +b.dataset.min;
+      S.durations.focus = +b.dataset.min*60;
       saveSettings();
       if (S.mode==='focus') resetTimer();
       render();
@@ -1044,17 +1051,24 @@ function bindEvents() {
   });
   // 自定义
   $('#btnCustom').addEventListener('click', () => {
-    $('#cuFocus').value = S.durations.focus;
-    $('#cuShort').value = S.durations.short;
-    $('#cuLong').value = S.durations.long;
+    $('#cuFocusMin').value = Math.floor(S.durations.focus/60);
+    $('#cuFocusSec').value = S.durations.focus % 60;
+    $('#cuShort').value = Math.round(S.durations.short/60);
+    $('#cuLong').value = Math.round(S.durations.long/60);
     $('#cuLongEvery').value = S.opts.longEvery||4;
     openModal('customModal');
   });
   $('#cuSave').addEventListener('click', () => {
-    const f = parseInt($('#cuFocus').value) || 25;
-    const s = parseInt($('#cuShort').value) || 5;
-    const l = parseInt($('#cuLong').value) || 15;
-    S.durations = { focus: Math.max(1,Math.min(600,f)), short: Math.max(1,Math.min(120,s)), long: Math.max(1,Math.min(180,l)) };
+    const fm = parseInt($('#cuFocusMin').value) || 0;
+    const fs = parseInt($('#cuFocusSec').value) || 0;
+    const s = parseInt($('#cuShort').value) || 0;
+    const l = parseInt($('#cuLong').value) || 0;
+    const focusSec = fm*60 + Math.max(0,Math.min(59,fs));
+    S.durations = {
+      focus: Math.max(60,Math.min(36000,focusSec)),
+      short: Math.max(60,Math.min(7200, s*60)),
+      long: Math.max(60,Math.min(10800, l*60))
+    };
     S.opts.longEvery = Math.max(1, Math.min(12, parseInt($('#cuLongEvery').value) || 4));
     saveSettings();
     if (S.mode==='focus') resetTimer();
@@ -1105,14 +1119,8 @@ function bindEvents() {
     localStorage.removeItem(TIMER_KEY);
     resetTimer();
   });
-  // 切出回来：保存理由并继续 / 跳过
+  // 切出回来：保存理由并继续（必填理由，不可跳过/关闭）
   $('#btnBackFocus').addEventListener('click', saveBackReason);
-  $('#btnBackSkip').addEventListener('click', () => {
-    closeModal('backModal');
-    localStorage.removeItem(PENDING_QUIT_KEY);
-    render();
-    toast('欢迎回来，继续专注！','ok');
-  });
   // 切出 chip：点击打开记录管理
   $('#chipQuit').addEventListener('click', () => { loadQuitList(); openModal('quitModal'); });
   $('#quitRefresh').addEventListener('click', loadQuitList);
