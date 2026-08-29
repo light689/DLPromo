@@ -197,12 +197,41 @@ function notify(title, body) {
 }
 
 // ---- 渲染计时器 ----
+// 为圆环生成 60 个刻度线（每 6° 一根，整 5 分刻度加粗）
+function buildRingTicks() {
+  const svg = $('#ringWrap svg');
+  const NS = 'http://www.w3.org/2000/svg';
+  const g = document.createElementNS(NS, 'g');
+  g.setAttribute('id', 'ringTicks');
+  for (let i = 0; i < 60; i++) {
+    const a = i * 6 * Math.PI / 180;
+    const major = i % 5 === 0;
+    const r1 = 84, r2 = major ? 78 : 81;
+    const line = document.createElementNS(NS, 'line');
+    line.setAttribute('x1', (110 + Math.sin(a) * r1).toFixed(2));
+    line.setAttribute('y1', (110 - Math.cos(a) * r1).toFixed(2));
+    line.setAttribute('x2', (110 + Math.sin(a) * r2).toFixed(2));
+    line.setAttribute('y2', (110 - Math.cos(a) * r2).toFixed(2));
+    line.setAttribute('stroke', 'rgba(251,247,236,.5)');
+    line.setAttribute('stroke-width', major ? '2' : '1');
+    line.setAttribute('stroke-linecap', 'round');
+    g.appendChild(line);
+  }
+  svg.appendChild(g);
+}
+
 function render() {
   const m = Math.floor(S.remain/60), s = S.remain%60;
   $('#time').textContent = pad(m)+':'+pad(s);
   const C = 2*Math.PI*98, prog = S.total>0 ? S.remain/S.total : 0;
   $('#ringFg').style.strokeDashoffset = C*(1-prog);
   document.body.dataset.mode = S.mode;
+  // 运行时外发光
+  document.body.classList.toggle('running', S.running);
+  // 随模式更新浏览器主题色
+  const mc = document.body.dataset.mode;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', mc==='short' ? '#d4a000' : mc==='long' ? '#1e50aa' : '#e01f26');
   $('#modeLabel').textContent = S.mode==='focus' ? '专注·FOCUS' : S.mode==='short' ? '短休·BREAK' : '长休·REST';
   $('#btnStart').style.display = S.running ? 'none' : '';
   $('#btnPause').style.display = S.running ? '' : 'none';
@@ -227,7 +256,51 @@ function render() {
   });
   // 结束按钮可见性
   $('#btnEnd').style.display = S.mode==='focus' ? '' : 'none';
+  // 沉浸式全屏同步
+  if (fsActive) {
+    $('#fsTime').textContent = pad(m)+':'+pad(s);
+    $('#fsSub').textContent = S.mode==='focus' ? '专注 · FOCUS' : S.mode==='short' ? '短休 · BREAK' : '长休 · REST';
+    const t = $('#taskInput').value.trim();
+    $('#fsTask').textContent = t ? '本轮 · '+t : '';
+  }
 }
+
+// ---- 沉浸式全屏 ----
+let fsActive = false;
+
+function openFS() {
+  try { $('#fsExit').focus(); } catch(e) {}
+  fsActive = true;
+  $('#fsLayer').classList.add('open');
+  document.body.classList.add('fs-on');
+  // 真实浏览器全屏
+  const el = document.documentElement;
+  const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (rfs && !document.fullscreenElement) rfs.call(el);
+  // 尽量锁横屏（仅在支持且用户手势下生效）
+  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); } catch(e) {}
+  render();
+}
+
+function closeFS() {
+  if (!fsActive) return;
+  fsActive = false;
+  $('#fsLayer').classList.remove('open');
+  document.body.classList.remove('fs-on');
+  // 退出真实全屏
+  if (document.fullscreenElement) { const e = document.exitFullscreen || document.webkitExitFullscreen; if (e) e.call(document); }
+  try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
+}
+
+// 全屏点击层：开始/暂停（绑定见 bindEvents）
+
+// 浏览器全屏被用户退出（Esc 等）时同步关闭沉浸层
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement && fsActive) closeFS();
+});
+document.addEventListener('webkitfullscreenchange', () => {
+  if (!document.fullscreenElement && fsActive) closeFS();
+});
 
 // ---- 计时器控制 ----
 function tick() {
@@ -298,10 +371,12 @@ function onTimerEnd() {
   saveTimerState();
   render();
   if (S.mode === 'focus') {
+    closeFS();
     playWhistle();
     notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已到，请结算');
     openEndModal(false);
   } else {
+    closeFS();
     playWhistle();
     notify('休息结束', '准备开始下一轮专注');
     S.mode = 'focus'; resetTimer();
@@ -311,9 +386,10 @@ function onTimerEnd() {
 
 function endSession() {
   if (S.mode !== 'focus') return;
-  if (S.remain <= 0 && !S.running) { openEndModal(false); return; }
+  if (S.remain <= 0 && !S.running) { closeFS(); openEndModal(false); return; }
   if (!S.startedAt) { toast('还没有开始计时','warn'); return; }
   pauseTimer();
+  closeFS();
   openEndModal(true);
 }
 
@@ -760,6 +836,10 @@ function bindEvents() {
   $('#eDelete').addEventListener('click', deleteEdit);
   // 刷新
   $('#btnRefresh').addEventListener('click', refreshAll);
+  // 沉浸式全屏
+  $('#btnFullscreen').addEventListener('click', openFS);
+  $('#fsTap').addEventListener('click', () => { S.running ? pauseTimer() : startTimer(); });
+  $('#fsExit').addEventListener('click', closeFS);
   // 恢复会话
   $('#btnResume').addEventListener('click', () => {
     closeModal('resumeModal');
@@ -775,6 +855,7 @@ function bindEvents() {
 
 // ---- 启动 ----
 bindEvents();
+buildRingTicks();
 render();
 maybeResume();
 refreshAll();
