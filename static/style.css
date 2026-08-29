@@ -68,6 +68,13 @@ input[type="checkbox"] { accent-color:var(--red); width:18px; height:18px; flex-
 ::-webkit-scrollbar-track { background:transparent; }
 ::-webkit-scrollbar-thumb { background:rgba(17,17,17,.3); border-radius:8px; }
 
+/* 移动端隐藏所有滚动条（右侧翻页指示器），桌面端保持原样 */
+@media (max-width: 719px) {
+  html { scrollbar-width: none; -ms-overflow-style: none; }
+  ::-webkit-scrollbar { display:none !important; width:0 !important; height:0 !important; }
+  .rec-wrap { scrollbar-width: none; }
+}
+
 /* 隐藏 number 输入框的上下箭头 */
 input[type="number"]::-webkit-outer-spin-button,
 input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
