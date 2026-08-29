@@ -223,16 +223,23 @@ function buildRingTicks() {
 
 function render() {
   const m = Math.floor(S.remain/60), s = S.remain%60;
-  $('#time').textContent = pad(m)+':'+pad(s);
+  const timeStr = pad(m)+':'+pad(s);
+  document.body.dataset.mode = S.mode;
+  document.body.classList.toggle('running', S.running);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', S.mode==='short' ? '#1e50aa' : S.mode==='long' ? '#1e8a3c' : '#ffd100');
+  document.title = timeStr+' · '+(S.mode==='focus'?'专注':'休息')+' | ТОМАТО';
+  // 全屏时只更新全屏层，跳过非全屏 DOM，避免 200ms 重绘卡顿
+  if (fsActive) {
+    $('#fsTime').textContent = timeStr;
+    $('#fsSub').textContent = S.mode==='focus' ? '专注 · FOCUS' : S.mode==='short' ? '短休 · BREAK' : '长休 · REST';
+    const t = $('#taskInput').value.trim();
+    $('#fsTask').textContent = t ? '本轮 · '+t : '';
+    return;
+  }
+  $('#time').textContent = timeStr;
   const C = 2*Math.PI*98, prog = S.total>0 ? S.remain/S.total : 0;
   $('#ringFg').style.strokeDashoffset = C*(1-prog);
-  document.body.dataset.mode = S.mode;
-  // 运行时外发光
-  document.body.classList.toggle('running', S.running);
-  // 随模式更新浏览器主题色
-  const mc = document.body.dataset.mode;
-  const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', mc==='short' ? '#d4a000' : mc==='long' ? '#1e50aa' : '#e01f26');
   $('#modeLabel').textContent = S.mode==='focus' ? '专注·FOCUS' : S.mode==='short' ? '短休·BREAK' : '长休·REST';
   $('#btnStart').style.display = S.running ? 'none' : '';
   $('#btnPause').style.display = S.running ? '' : 'none';
@@ -243,28 +250,17 @@ function render() {
   } else {
     $('#btnStart').textContent = '继续';
   }
-  document.title = pad(m)+':'+pad(s)+' · '+(S.mode==='focus'?'专注':'休息')+' | ТОМАТО';
   const every = Math.max(1, S.opts.longEvery||4);
   const r = S.round % every;
   const disp = S.round===0 ? 0 : (r===0?every:r);
   $('#cycleLabel').textContent = '本轮 '+disp+' / '+every+' 个番茄';
-  // 更新预设按钮状态
   $$('#presets button[data-min]').forEach(b => {
     b.classList.toggle('active', +b.dataset.min === S.durations.focus);
   });
-  // 模式标签
   $$('#modeTabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === S.mode);
   });
-  // 结束按钮可见性：专注/休息均可提前结束
   $('#btnEnd').style.display = 'inline-flex';
-  // 沉浸式全屏同步
-  if (fsActive) {
-    $('#fsTime').textContent = pad(m)+':'+pad(s);
-    $('#fsSub').textContent = S.mode==='focus' ? '专注 · FOCUS' : S.mode==='short' ? '短休 · BREAK' : '长休 · REST';
-    const t = $('#taskInput').value.trim();
-    $('#fsTask').textContent = t ? '本轮 · '+t : '';
-  }
 }
 
 // ---- 沉浸式全屏 ----
