@@ -256,8 +256,8 @@ function render() {
   $$('#modeTabs button').forEach(b => {
     b.classList.toggle('active', b.dataset.mode === S.mode);
   });
-  // 结束按钮可见性
-  $('#btnEnd').style.display = S.mode==='focus' ? '' : 'none';
+  // 结束按钮可见性：专注/休息均可提前结束
+  $('#btnEnd').style.display = 'inline-flex';
   // 沉浸式全屏同步
   if (fsActive) {
     $('#fsTime').textContent = pad(m)+':'+pad(s);
@@ -399,7 +399,16 @@ function autoSettleDone() {
 }
 
 function endSession() {
-  if (S.mode !== 'focus') return;
+  // 休息模式：提前结束，直接切回专注
+  if (S.mode !== 'focus') {
+    pauseTimer();
+    closeFS();
+    playWhistle();
+    notify('休息已结束', '开始下一轮专注');
+    S.mode = 'focus'; resetTimer();
+    if (S.opts.autoFocus) startTimer();
+    return;
+  }
   if (S.remain <= 0 && !S.running) { closeFS(); autoSettleDone(); return; }
   if (!S.startedAt) { toast('还没有开始计时','warn'); return; }
   pauseTimer();
