@@ -658,8 +658,6 @@ tr:hover { background:rgba(224,31,38,.10); }
   padding:9px 10px; border:2px solid var(--ink); background:rgba(255,255,255,.5); font-size:16px; width:100%;
 }
 .form-grid textarea { resize:vertical; }
-.dur-split { display:flex; gap:6px; align-items:center; }
-.dur-split input { flex:1; text-align:center; }
 .end-title { font-size:1.2rem; letter-spacing:2px; margin-bottom:4px; }
 @media (min-width: 720px) {
   .end-title { font-size:1.6rem; letter-spacing:3px; margin-bottom:6px; }
