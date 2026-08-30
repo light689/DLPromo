@@ -42,7 +42,7 @@ let PENDING = null;        // 待结算信息
 let editingId = null;      // 编辑中的记录 id
 let offline = false;       // 在线状态
 let visibilityHidden = false;
-let lastQuitTs = 0;
+let lastQuitTs = parseInt(localStorage.getItem('pomo_last_quit_ts')||'0',10) || 0;
 let saving = false;        // 防止重复提交
 const TIMER_KEY = 'tomato_timer';
 const PENDING_KEY = 'pomo_pending';
@@ -847,6 +847,7 @@ function onPageHidden() {
   const hasPending = !!localStorage.getItem(PENDING_QUIT_KEY);
   if (now - lastQuitTs >= QUIT_COOLDOWN_MS && !hasPending) {
     lastQuitTs = now;
+    localStorage.setItem('pomo_last_quit_ts', String(now));
     try {
       if (navigator.sendBeacon) navigator.sendBeacon('/api/quit');
       else fetch('/api/quit', { method:'POST', keepalive:true }).catch(()=>{});
@@ -871,7 +872,9 @@ function onPageVisible() {
     toast('检测到切出（未开始计时 / 休息，不记录）','warn');
     return;
   }
-  showBackModal();
+  // 仅当确实记录了切出（仍有未填理由的待处理项）时才弹激励模态；
+  // 冷却期内被拦截的切出不弹窗，避免 saveBackReason 兜底新建记录绕过冷却
+  if (localStorage.getItem(PENDING_QUIT_KEY)) showBackModal();
 }
 
 // 切出回来：弹窗激励 + 填理由（专注模式必须填理由）
