@@ -191,9 +191,68 @@ function playWhistle() {
 }
 
 // ---- 通知 ----
+// 网页通知：计时运行时常驻显示剩余进度（每秒刷新，requireInteraction 防自动关闭），暂停/结束同步状态
+let progressNotif = null;
+let lastNotifUpdate = 0;                    // 进度通知刷新节流
+
+function notifEnabled() {
+  return S && S.opts.notify && 'Notification' in window;
+}
+function notifOK() {
+  return notifEnabled() && Notification.permission === 'granted';
+}
+
+// 请求/校验通知权限（需在用户手势内调用）
+async function requestNotifPermission() {
+  if (!notifEnabled()) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  try {
+    const p = await Notification.requestPermission();
+    return p === 'granted';
+  } catch(e) { return false; }
+}
+
+// 事件通知（计时结束等）：常驻显示，同 tag 后到替先
 function notify(title, body) {
-  if (!S.opts.notify || !('Notification' in window) || Notification.permission!=='granted') return;
-  try { new Notification(title, { body }); } catch(e) {}
+  if (!notifOK()) return;
+  try { new Notification(title, { body, tag: 'pomo-event', requireInteraction: true }); } catch(e) {}
+}
+
+function progressText() {
+  const m = Math.floor(S.remain/60), s = S.remain%60;
+  const modeCN = S.mode==='focus' ? '专注' : S.mode==='short' ? '短休' : '长休';
+  const state = S.running ? '运行中' : '已暂停';
+  return state+' · '+pad(m)+':'+pad(s)+' 剩余 · '+modeCN;
+}
+
+// 常驻进度通知：同 tag 覆盖更新，弹窗点击回到页面
+function showProgressNotif() {
+  if (!notifOK()) return;
+  const modeCN = S.mode==='focus' ? '专注' : S.mode==='short' ? '短休' : '长休';
+  try {
+    const n = new Notification('ТОМАТО · '+modeCN, {
+      body: progressText(),
+      tag: 'pomo-progress',
+      requireInteraction: true,
+      silent: true
+    });
+    n.onclick = () => { try { window.focus(); n.close(); } catch(e){} };
+    progressNotif = n;
+  } catch(e) { progressNotif = null; }
+}
+
+function closeProgressNotif() {
+  if (progressNotif) { try { progressNotif.close(); } catch(e){} progressNotif = null; }
+}
+
+// 每秒最多刷新一次进度通知
+function maybeUpdateProgressNotif(force) {
+  if (!notifOK()) return;
+  const now = Date.now();
+  if (!force && now - lastNotifUpdate < 1000) return;
+  lastNotifUpdate = now;
+  showProgressNotif();
 }
 
 // ---- 渲染计时器 ----
@@ -332,6 +391,7 @@ document.addEventListener('webkitfullscreenchange', () => {
 function tick() {
   S.remain = Math.max(0, Math.round((S.endAt - Date.now())/1000));
   render();
+  maybeUpdateProgressNotif();
   if (S.remain <= 0) { onTimerEnd(); }
 }
 
@@ -346,9 +406,13 @@ function startTimer() {
   S.segStart = Date.now();
   if (!S.startedAt) S.startedAt = new Date();
   S.tickId = setInterval(tick, 200);
-  // 请求通知权限
-  if (S.opts.notify && 'Notification' in window && Notification.permission==='default') {
-    Notification.requestPermission();
+  // 请求通知权限并常驻显示剩余进度
+  if (notifEnabled()) {
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().then(p => { if (p === 'granted') showProgressNotif(); });
+    } else if (Notification.permission === 'granted') {
+      showProgressNotif();
+    }
   }
   saveTimerState();
   render();
@@ -366,6 +430,7 @@ function pauseTimer() {
   saveTimerState();
   render();
   syncWakeLock();
+  maybeUpdateProgressNotif(true);          // 暂停：进度通知标记为「已暂停」
 }
 
 function resetTimer() {
@@ -378,6 +443,7 @@ function resetTimer() {
   saveTimerState();
   render();
   syncWakeLock();
+  closeProgressNotif();
 }
 
 function switchMode(mode) {
@@ -400,6 +466,7 @@ function onTimerEnd() {
   saveTimerState();
   render();
   syncWakeLock();
+  closeProgressNotif();                    // 常驻进度通知结束，改由事件通知提示结果
   if (S.mode === 'focus') {
     playWhistle();
     notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已完成，自动入账');
@@ -1122,6 +1189,22 @@ function bindEvents() {
       el.checked = S.opts[key];
       el.addEventListener('change', () => {
         S.opts[key] = el.checked;
+        if (key === 'notify') {
+          if (el.checked) {
+            if (!('Notification' in window)) { toast('当前浏览器不支持网页通知','warn'); }
+            else if (Notification.permission === 'denied') { toast('通知权限已被拒绝，请在浏览器设置中开启','warn'); }
+            else if (Notification.permission === 'default') {
+              Notification.requestPermission().then(p => {
+                if (p !== 'granted') toast('未获得通知权限，进度通知不会显示','warn');
+                else if (S.running) showProgressNotif();
+              });
+            } else if (S.running) {
+              showProgressNotif();
+            }
+          } else {
+            closeProgressNotif();
+          }
+        }
         saveSettings();
       });
     }
@@ -1192,6 +1275,8 @@ bindEvents();
 buildRingTicks();
 render();
 maybeResume();
+// 恢复会话时若计时仍在运行且已授权通知，重新常驻显示进度
+if (S.running && notifOK()) showProgressNotif();
 refreshAll();
 // 每 5 分钟自动刷新（后台静默）
 setInterval(() => { if (!document.hidden) refreshAll(); }, 300000);
