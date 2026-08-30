@@ -42,7 +42,6 @@ let PENDING = null;        // 待结算信息
 let editingId = null;      // 编辑中的记录 id
 let offline = false;       // 在线状态
 let visibilityHidden = false;
-let lastQuitTs = parseInt(localStorage.getItem('pomo_last_quit_ts')||'0',10) || 0;
 let saving = false;        // 防止重复提交
 const TIMER_KEY = 'tomato_timer';
 const PENDING_KEY = 'pomo_pending';
@@ -814,7 +813,6 @@ let quitThisHide = false;
 let exiting = false;                       // 退出模式：不记录切出
 let wakeLock = null;                       // Screen Wake Lock 句柄
 const PENDING_QUIT_KEY = 'pomo_pending_quit';
-const QUIT_COOLDOWN_MS = 60000;            // 切出冷却：1 分钟内最多 1 次
 
 function quitLocalNow() {
   const d = new Date();
@@ -842,17 +840,18 @@ function onPageHidden() {
     return;
   }
   if (S.running) pauseTimer();           // 专注切出：默认暂停
-  // 冷却：1 分钟内最多 1 次，且未填理由期间不再新增
-  const now = Date.now();
-  const hasPending = !!localStorage.getItem(PENDING_QUIT_KEY);
-  if (now - lastQuitTs >= QUIT_COOLDOWN_MS && !hasPending) {
-    lastQuitTs = now;
-    localStorage.setItem('pomo_last_quit_ts', String(now));
+  // 理由尚未填写期间，本次切出不重复跟踪（避免待填理由堆积）；时间上不做冷却
+  if (!localStorage.getItem(PENDING_QUIT_KEY)) {
+    const t = quitLocalNow();
+    localStorage.setItem(PENDING_QUIT_KEY, t);
     try {
-      if (navigator.sendBeacon) navigator.sendBeacon('/api/quit');
-      else fetch('/api/quit', { method:'POST', keepalive:true }).catch(()=>{});
+      const payload = JSON.stringify({ quit_at: t });
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon('/api/quit', new Blob([payload], { type: 'application/json' }));
+      } else {
+        fetch('/api/quit', { method:'POST', keepalive:true, headers:{ 'Content-Type':'application/json' }, body: payload }).catch(()=>{});
+      }
     } catch(e) {}
-    localStorage.setItem(PENDING_QUIT_KEY, quitLocalNow());
     const chip = $('#chipQuit');
     if (chip) {
       const n = (parseInt(chip.dataset.v||'0',10)||0)+1;
@@ -880,7 +879,9 @@ function onPageVisible() {
 // 切出回来：弹窗激励 + 填理由（专注模式必须填理由）
 function showBackModal() {
   const chip = $('#chipQuit');
-  const n = chip ? (parseInt(chip.dataset.v||'0',10)||0) : 0;
+  let n = chip ? (parseInt(chip.dataset.v||'0',10)||0) : 0;
+  // 弹窗即代表有一次待填理由的切出，即使服务端计数未同步也至少显示 1 次
+  if (n < 1 && localStorage.getItem(PENDING_QUIT_KEY)) n = 1;
   const t = S && S.running
     ? '计时器还在运转，剩余 <b>'+fmtHM(Math.max(1,Math.round(S.remain/60)))+'</b>'
     : '随时可以开始新的一轮';
@@ -901,21 +902,30 @@ function showBackModal() {
   openModal('backModal');
 }
 
-// 保存切出理由：补到最近一条空理由记录，或新建一条（专注必须填）
+// 保存切出理由：按本地 quit_at 精确匹配该次切出记录补理由，匹配不到则新建；
+// 保存失败保留待填状态以便重试（专注必须填）
 async function saveBackReason() {
   const reason = $('#backReason').value.trim();
   if (!reason) { $('#backReason').focus(); toast('专注切出必须填写理由','warn'); return; }
   const quitAt = localStorage.getItem(PENDING_QUIT_KEY);
-  const list = await api('/api/quit_logs?limit=1');
+  const list = await api('/api/quit_logs?limit=100');
+  const match = list && list.ok && list.data && quitAt
+    ? list.data.find(r => !r.reason && r.quit_at === quitAt)
+    : null;
   let saved = false;
-  if (list.ok && list.data && list.data.length && !list.data[0].reason) {
-    const r = await api('/api/quit_logs/'+list.data[0].id, { method:'PATCH', body:{ reason, quit_at: quitAt } });
+  if (match) {
+    const r = await api('/api/quit_logs/'+match.id, { method:'PATCH', body:{ reason } });
+    saved = !!(r && r.ok);
+  } else {
+    const body = { reason };
+    if (quitAt) body.quit_at = quitAt;
+    const r = await api('/api/quit', { method:'POST', body });
     saved = !!(r && r.ok);
   }
   if (!saved) {
-    const body = { reason };
-    if (quitAt) body.quit_at = quitAt;
-    await api('/api/quit', { method:'POST', body });
+    toast('保存失败，请联网后重试（理由已被保留）','err');
+    $('#backReason').focus();
+    return;
   }
   localStorage.removeItem(PENDING_QUIT_KEY);
   closeModal('backModal');
