@@ -190,6 +190,66 @@ function playWhistle() {
   beep(988, .50, .44, 'square', .28);
 }
 
+// ---- 后台保活音频：极低音量定音让 AudioContext 保持活跃，切后台也能继续计时并响铃 ----
+let keepaliveOsc = null;
+function startKeepalive() {
+  stopKeepalive();
+  if (!S.opts.sound) return;
+  try {
+    const ctx = ac();
+    const osc = ctx.createOscillator();
+    const g = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = 180;
+    g.gain.value = 0.006;                       // 几乎听不见的定音
+    osc.connect(g); g.connect(ctx.destination);
+    osc.start();
+    keepaliveOsc = { osc, g };
+  } catch(e) {}
+}
+function stopKeepalive() {
+  if (!keepaliveOsc) return;
+  try { keepaliveOsc.osc.stop(); } catch(e) {}
+  try { keepaliveOsc.osc.disconnect(); keepaliveOsc.g.disconnect(); } catch(e) {}
+  keepaliveOsc = null;
+}
+
+// ---- 系统媒体接口（Media Session）：锁屏/系统媒体栏常驻进度 + 播放控制 ----
+function mediaSessionOK() {
+  return 'mediaSession' in navigator && 'MediaMetadata' in window;
+}
+function updateMediaSession() {
+  if (!mediaSessionOK()) return;
+  const modeCN = S.mode==='focus' ? '专注' : S.mode==='short' ? '短休' : '长休';
+  const m = Math.floor(S.remain/60), s = S.remain%60;
+  try {
+    if (!navigator.mediaSession.metadata) {
+      navigator.mediaSession.setActionHandler('play', () => startTimer());
+      navigator.mediaSession.setActionHandler('pause', () => pauseTimer());
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        if (S.mode === 'focus') {
+          const every = Math.max(1, S.opts.longEvery || 4);
+          switchMode(S.round>0 && S.round%every===0 ? 'long' : 'short');
+        }
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => { if (S.mode !== 'focus') switchMode('focus'); });
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: 'ТОМАТО · '+modeCN,
+      artist: 'DLPromo',
+      album: pad(m)+':'+pad(s)+' 剩余 · '+(S.running ? '运行中' : '已暂停')
+    });
+    navigator.mediaSession.playbackState = S.running ? 'playing' : 'paused';
+  } catch(e) {}
+}
+function clearMediaSession() {
+  if (!mediaSessionOK()) return;
+  try {
+    navigator.mediaSession.metadata = null;
+    navigator.mediaSession.playbackState = 'none';
+    ['play','pause','nexttrack','previoustrack'].forEach(a => navigator.mediaSession.setActionHandler(a, null));
+  } catch(e) {}
+}
+
 // ---- 通知 ----
 // 网页通知：计时运行时常驻显示剩余进度（每秒刷新，requireInteraction 防自动关闭），暂停/结束同步状态
 let progressNotif = null;
@@ -246,13 +306,13 @@ function closeProgressNotif() {
   if (progressNotif) { try { progressNotif.close(); } catch(e){} progressNotif = null; }
 }
 
-// 每秒最多刷新一次进度通知
+// 每秒最多刷新一次进度通知（同时刷新系统媒体卡片）
 function maybeUpdateProgressNotif(force) {
-  if (!notifOK()) return;
   const now = Date.now();
   if (!force && now - lastNotifUpdate < 1000) return;
   lastNotifUpdate = now;
-  showProgressNotif();
+  showProgressNotif();        // 未授权通知时内部自行跳过
+  updateMediaSession();       // 系统媒体卡片（无需通知权限）
 }
 
 // ---- 渲染计时器 ----
@@ -407,16 +467,14 @@ function startTimer() {
   if (!S.startedAt) S.startedAt = new Date();
   S.tickId = setInterval(tick, 200);
   // 请求通知权限并常驻显示剩余进度
-  if (notifEnabled()) {
-    if (Notification.permission === 'default') {
-      Notification.requestPermission().then(p => { if (p === 'granted') showProgressNotif(); });
-    } else if (Notification.permission === 'granted') {
-      showProgressNotif();
-    }
+  if (notifEnabled() && Notification.permission === 'default') {
+    Notification.requestPermission().then(p => { if (p === 'granted') maybeUpdateProgressNotif(true); });
   }
+  startKeepalive();                   // 后台保活音频 + 注册系统媒体接口
   saveTimerState();
   render();
   syncWakeLock();
+  maybeUpdateProgressNotif(true);
 }
 
 function pauseTimer() {
@@ -430,6 +488,7 @@ function pauseTimer() {
   saveTimerState();
   render();
   syncWakeLock();
+  stopKeepalive();
   maybeUpdateProgressNotif(true);          // 暂停：进度通知标记为「已暂停」
 }
 
@@ -443,7 +502,9 @@ function resetTimer() {
   saveTimerState();
   render();
   syncWakeLock();
+  stopKeepalive();
   closeProgressNotif();
+  clearMediaSession();
 }
 
 function switchMode(mode) {
@@ -466,7 +527,9 @@ function onTimerEnd() {
   saveTimerState();
   render();
   syncWakeLock();
+  stopKeepalive();
   closeProgressNotif();                    // 常驻进度通知结束，改由事件通知提示结果
+  clearMediaSession();
   if (S.mode === 'focus') {
     playWhistle();
     notify('番茄结束', '本轮 '+S.durations.focus+' 分钟已完成，自动入账');
@@ -935,7 +998,9 @@ function onPageVisible() {
   if (!quitThisHide) return;
   quitThisHide = false;
   if (!focusInProgress()) {
-    toast('检测到切出（未开始计时 / 休息，不记录）','warn');
+    // 短休/长休期间切出：计时持续进行；未开始的专注/休息仅提示
+    const inBreak = S && (S.mode==='short' || S.mode==='long') && S.startedAt;
+    toast(inBreak ? '休息期间切出，计时持续进行' : '检测到切出（未开始计时，不记录）','warn');
     return;
   }
   // 仅当确实记录了切出（仍有未填理由的待处理项）时才弹激励模态；
@@ -1205,6 +1270,9 @@ function bindEvents() {
             closeProgressNotif();
           }
         }
+        else if (key === 'sound' && S.running) {
+          el.checked ? startKeepalive() : stopKeepalive();
+        }
         saveSettings();
       });
     }
@@ -1275,8 +1343,11 @@ bindEvents();
 buildRingTicks();
 render();
 maybeResume();
-// 恢复会话时若计时仍在运行且已授权通知，重新常驻显示进度
-if (S.running && notifOK()) showProgressNotif();
+// 恢复会话时若计时仍在运行，重启后台音频保活并常驻显示进度
+if (S.running) {
+  startKeepalive();
+  maybeUpdateProgressNotif(true);
+}
 refreshAll();
 // 每 5 分钟自动刷新（后台静默）
 setInterval(() => { if (!document.hidden) refreshAll(); }, 300000);
