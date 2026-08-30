@@ -803,6 +803,28 @@ tr:hover { background:rgba(224,31,38,.10); }
   text-transform:uppercase; pointer-events:none;
 }
 
+/* ========== 全屏暂停明显提示 ========== */
+.fs-layer.paused .fs-time {
+  opacity: .28;
+}
+.fs-layer.paused .fs-sub {
+  color: var(--red);
+  font-size: clamp(1rem, 3.2vmin, 1.5rem);
+  text-shadow: 0 0 3vmin color-mix(in srgb, var(--red) 45%, transparent);
+}
+.fs-layer.paused::after {
+  content:''; position:absolute; inset:0; z-index:5; pointer-events:none;
+  box-shadow: inset 0 0 0 6px var(--red), inset 0 0 110px rgba(224,31,38,.32);
+  animation: fsPausedBlink 1.8s ease-in-out infinite;
+}
+@keyframes fsPausedBlink {
+  0%, 100% { opacity:.18; }
+  50% { opacity:1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-layer.paused::after { animation:none; opacity:.55; }
+}
+
 /* ========== 页脚 ========== */
 footer { position:relative; z-index:1; margin-top:6px; padding: 0 4px; }
 @media (min-width: 720px) {

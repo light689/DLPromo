@@ -232,9 +232,14 @@ function render() {
   // 全屏时只更新全屏层，跳过非全屏 DOM，避免 200ms 重绘卡顿
   if (fsActive) {
     $('#fsTime').textContent = timeStr;
-    $('#fsSub').textContent = S.mode==='focus' ? '专注 · FOCUS' : S.mode==='short' ? '短休 · BREAK' : '长休 · REST';
+    // 已开始过但当前未运行 = 暂停态：给出明显提示
+    const paused = !S.running && S.startedAt;
+    const modeText = S.mode==='focus' ? '专注 · FOCUS' : S.mode==='short' ? '短休 · BREAK' : '长休 · REST';
+    $('#fsSub').textContent = paused ? '已暂停 · PAUSED' : modeText;
     const t = $('#taskInput').value.trim();
     $('#fsTask').textContent = t ? '本轮 · '+t : '';
+    $('#fsLayer').classList.toggle('paused', paused);
+    $('#fsHint').textContent = S.running ? '点击暂停' : (S.startedAt ? '点击继续' : '点击开始');
     return;
   }
   $('#time').textContent = timeStr;
@@ -308,6 +313,8 @@ function closeFS() {
   // 退出真实全屏
   if (document.fullscreenElement) { const e = document.exitFullscreen || document.webkitExitFullscreen; if (e) e.call(document); }
   try { if (screen.orientation && screen.orientation.unlock) screen.orientation.unlock(); } catch(e) {}
+  // 全屏期间非全屏 DOM 被跳过了更新，退出后立即同步回最新计时状态
+  render();
 }
 
 // 全屏点击层：开始/暂停（绑定见 bindEvents）
