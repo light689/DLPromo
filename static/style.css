@@ -741,15 +741,8 @@ tr:hover { background:rgba(224,31,38,.10); }
   display:flex; align-items:center; justify-content:center;
   pointer-events:none;
 }
-/* 竖屏时保留构成主义色环（横屏隐藏）——随模式色 */
-.fs-stage::before {
-  content:''; position:absolute; width:min(92vmin, 540px); aspect-ratio:1; border-radius:50%;
-  border:2px solid color-mix(in srgb, var(--mode) 35%, rgba(255,255,255,.08));
-  box-shadow: 0 0 0 14px rgba(255,255,255,.02), 0 0 0 28px rgba(255,255,255,.02);
-}
-@media (orientation: landscape) {
-  .fs-stage::before { display:none; }
-}
+/* 移除全屏色环装饰（横竖屏均不显示，避免竖屏下大圆圈穿模错位） */
+.fs-stage::before { display:none; }
 
 .fs-digits {
   position:relative; z-index:3;
@@ -773,6 +766,10 @@ tr:hover { background:rgba(224,31,38,.10); }
   color: var(--mode);
   text-shadow: 0 0 3vmin color-mix(in srgb, var(--mode) 45%, transparent);
   transition: color .3s;
+}
+/* 竖屏全屏（安卓兼容）：缩小时钟避免窄屏溢出 */
+@media (orientation: portrait) {
+  .fs-time { font-size: clamp(4rem, 30vmin, 12rem); }
 }
 .fs-sub {
   font-size:clamp(.8rem, 2.4vmin, 1.1rem); letter-spacing:.5em; text-indent:.5em;

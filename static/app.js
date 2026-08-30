@@ -265,6 +265,14 @@ function render() {
 
 // ---- 沉浸式全屏 ----
 let fsActive = false;
+let fsLockRequested = false;
+
+function isPortrait() {
+  try {
+    const t = screen.orientation && screen.orientation.type;
+    return t ? t.startsWith('portrait') : matchMedia('(orientation: portrait)').matches;
+  } catch(e) { return matchMedia('(orientation: portrait)').matches; }
+}
 
 function openFS() {
   try { $('#fsExit').focus(); } catch(e) {}
@@ -274,10 +282,22 @@ function openFS() {
   // 真实浏览器全屏
   const el = document.documentElement;
   const rfs = el.requestFullscreen || el.webkitRequestFullscreen;
-  if (rfs && !document.fullscreenElement) rfs.call(el);
-  // 尽量锁横屏（仅在支持且用户手势下生效）
-  try { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(()=>{}); } catch(e) {}
+  fsLockRequested = true;
+  if (rfs && !document.fullscreenElement) { try { rfs.call(el); } catch(e) {} }
   render();
+}
+
+// 全屏建立后锁定方向：默认横屏；若进入时已是竖屏则保持竖屏（安卓兼容，不强制旋转）
+function tryLockLandscape() {
+  if (!fsLockRequested) return;
+  fsLockRequested = false;
+  if (isPortrait()) return; // 竖屏进入：兼容竖屏全屏
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      const p = screen.orientation.lock('landscape');
+      if (p && typeof p.catch === 'function') p.catch(()=>{});
+    }
+  } catch(e) {}
 }
 
 function closeFS() {
@@ -294,10 +314,12 @@ function closeFS() {
 
 // 浏览器全屏被用户退出（Esc 等）时同步关闭沉浸层
 document.addEventListener('fullscreenchange', () => {
-  if (!document.fullscreenElement && fsActive) closeFS();
+  if (document.fullscreenElement && fsActive) tryLockLandscape();
+  else if (!document.fullscreenElement && fsActive) closeFS();
 });
 document.addEventListener('webkitfullscreenchange', () => {
-  if (!document.fullscreenElement && fsActive) closeFS();
+  if (document.fullscreenElement && fsActive) tryLockLandscape();
+  else if (!document.fullscreenElement && fsActive) closeFS();
 });
 
 // ---- 计时器控制 ----
