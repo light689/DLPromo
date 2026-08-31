@@ -20,11 +20,16 @@ import io
 import json
 import logging
 import os
+import re
+import socket
 import sqlite3
+import subprocess
 import sys
 from typing import Any, Optional
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+import ipaddress
+
+from flask import Flask, Response, jsonify, redirect, request, send_from_directory
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -646,6 +651,116 @@ def security_headers(resp):
     return resp
 
 
+# ---------------------------------------------------------------- TLS / HTTPS
+# 网页通知（Notification）与媒体接口（Media Session）要求页面处于“安全上下文”：
+# 必须通过 HTTPS（或 localhost/127.0.0.1）访问，浏览器才会弹出通知权限框。
+# 本模块提供自签名证书生成与 HTTPS 启动，默认保持纯 HTTP，避免影响现有访问。
+CERT_DIR = os.path.join(BASE_DIR, "certs")
+CERT_PEM = os.path.join(CERT_DIR, "cert.pem")
+CERT_KEY = os.path.join(CERT_DIR, "key.pem")
+SUBNET_RE = re.compile(r"^[0-9a-fA-F:./]+$")
+
+
+def _valid_ip(s: str) -> bool:
+    try:
+        ipaddress.ip_address(s)
+        return True
+    except ValueError:
+        return False
+
+
+def _list_ips() -> set:
+    """收集本机可能被用于访问的地址：回环 + 各网卡 IPv4/IPv6。"""
+    ips = {"127.0.0.1", "::1"}
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ips.add(s.getsockname()[0])
+        s.close()
+    except Exception:
+        pass
+    try:
+        out = subprocess.check_output(["hostname", "-I"], text=True)
+        for tok in out.replace("\n", " ").split():
+            if tok.strip():
+                ips.add(tok.strip())
+    except Exception:
+        pass
+    return {ip for ip in ips if _valid_ip(ip)}
+
+
+def _lan_ip() -> str:
+    """用于提示局域网访问的地址：优先默认路由出口 IP，再回环。"""
+    try:
+        out = subprocess.check_output(["ip", "-4", "route", "get", "1.1.1.1"], text=True)
+        m = re.search(r"\bsrc ([\d.]+)", out)
+        if m and _valid_ip(m.group(1)):
+            return m.group(1)
+    except Exception:
+        pass
+    return "127.0.0.1"
+
+
+def _san_string(extra_ips=()) -> str:
+    """构建证书 subjectAltName：覆盖 localhost 与所有本机网卡 IP。"""
+    names = {"DNS:localhost", "DNS:dlpromo.local"}
+    for ip in _list_ips():
+        if ":" in ip:
+            names.add(f"IP:{ip}")
+        else:
+            names.add(f"IP:{ip}")
+    for ip in extra_ips or ():
+        if _valid_ip(str(ip)):
+            names.add(f"IP:{ip}")
+    return ",".join(sorted(names))
+
+
+def ensure_self_signed_cert(extra_ips=()) -> str:
+    """确保存在自签名证书，必要时调用 openssl 生成，返回 cert.pem 路径。"""
+    if os.path.exists(CERT_PEM) and os.path.exists(CERT_KEY):
+        return CERT_PEM
+    os.makedirs(CERT_DIR, exist_ok=True)
+    san = _san_string(extra_ips)
+    cmd = [
+        "openssl", "req", "-x509", "-newkey", "rsa:2048",
+        "-sha256", "-days", "3650", "-nodes",
+        "-keyout", CERT_KEY, "-out", CERT_PEM,
+        "-subj", "/C=CN/O=DLPromo/CN=dlpromo",
+        "-addext", f"subjectAltName={san}",
+        "-addext", "basicConstraints=CA:TRUE",
+        "-addext", "keyUsage=digitalSignature,keyEncipherment,keyCertSign",
+        "-addext", "extendedKeyUsage=serverAuth",
+    ]
+    log.info("正在生成自签名 HTTPS 证书……")
+    log.info("  证书: %s", CERT_PEM)
+    log.info("  SAN:  %s", san.replace(",", ", "))
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return CERT_PEM
+
+
+# ---------------------------------------------------------------- HTTP→HTTPS 跳转
+def _strip_host_port(host: str) -> str:
+    """去掉 Host 头里的端口，保留主机名/IP。"""
+    if host.startswith("["):
+        idx = host.find("]")
+        return host[1:idx] if idx > 0 else host
+    return host.rsplit(":", 1)[0] if ":" in host else host
+
+
+def _build_http_redirect(https_port: int) -> object:
+    """构造一个小应用：把 HTTP 请求 301 重定向到 HTTPS，保留原路径与主机名。"""
+    app = Flask("dlpromo_http_redirect", static_folder=None)
+
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def _redirect(path):
+        host = _strip_host_port(str(request.host))
+        suffix = f":{https_port}" if https_port not in (443, None) else ""
+        return redirect(f"https://{host}{suffix}/" + path, code=301)
+
+    return app
+
+
 # ---------------------------------------------------------------- main
 if __name__ == "__main__":
     args = sys.argv[1:]
@@ -654,8 +769,37 @@ if __name__ == "__main__":
         sys.exit(0)
 
     port = int(os.environ.get("PORT", "8000"))
+
+    ssl_ctx = None
+    scheme = "http"
+    want_ssl = (os.environ.get("DLPROMO_SSL") == "1") or ("--ssl" in args)
+    if want_ssl:
+        cert = os.environ.get("DLPROMO_CERT") or CERT_PEM
+        key = os.environ.get("DLPROMO_KEY") or CERT_KEY
+        if not (os.path.exists(cert) and os.path.exists(key)):
+            ensure_self_signed_cert()
+            cert, key = CERT_PEM, CERT_KEY
+        ssl_ctx = (cert, key)
+        scheme = "https"
+
     log.info("DLPromo · ТОМАТО-ЧАСЫ 后端启动")
-    log.info("访问地址: http://127.0.0.1:%d", port)
+    log.info("访问地址: %s://127.0.0.1:%d", scheme, port)
     log.info("数据文件: %s", DB_PATH)
     log.info("静态目录: %s", STATIC_DIR)
-    app.run(host="0.0.0.0", port=port, debug=False)
+    if scheme == "https":
+        lan = _lan_ip()
+        log.info("局域网访问: %s://%s:%d （首次请在浏览器「高级 → 继续访问/继续前往」确认信任后，再勾选系统通知即可弹窗）", scheme, lan, port)
+        http_port = int(os.environ.get("DLPROMO_HTTP_PORT") or 0)
+        if http_port and http_port != port:
+            from werkzeug.serving import run_simple
+            import threading
+            redir = _build_http_redirect(port)
+            t = threading.Thread(
+                target=run_simple,
+                args=("0.0.0.0", http_port, redir),
+                kwargs={"use_reloader": False},
+                daemon=True,
+            )
+            t.start()
+            log.info("HTTP 跳转: http://%s:%d → %s://%s:%d （老地址仍可访问）", lan, http_port, scheme, lan, port)
+    app.run(host="0.0.0.0", port=port, debug=False, ssl_context=ssl_ctx)
