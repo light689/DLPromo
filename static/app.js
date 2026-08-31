@@ -251,7 +251,7 @@ function clearMediaSession() {
 }
 
 // ---- 通知 ----
-// 网页通知：计时运行时常驻显示剩余进度（每秒刷新，requireInteraction 防自动关闭），暂停/结束同步状态
+// 网页通知：只在专注状态切换时弹一次（开始/暂停），不再每秒刷新，避免手机端通知持续闪烁
 let progressNotif = null;
 let lastNotifUpdate = 0;                    // 进度通知刷新节流
 
@@ -286,7 +286,7 @@ function progressText() {
   return state+' · '+pad(m)+':'+pad(s)+' 剩余 · '+modeCN;
 }
 
-// 常驻进度通知：同 tag 覆盖更新，弹窗点击回到页面
+// 进度通知：状态切换时弹一次（同 tag 覆盖），点击回到页面
 function showProgressNotif() {
   if (!notifOK()) return;
   const modeCN = S.mode==='focus' ? '专注' : S.mode==='short' ? '短休' : '长休';
@@ -306,7 +306,7 @@ function closeProgressNotif() {
   if (progressNotif) { try { progressNotif.close(); } catch(e){} progressNotif = null; }
 }
 
-// 每秒最多刷新一次进度通知（同时刷新系统媒体卡片）
+// 状态切换时刷新进度通知 + 系统媒体卡片
 function maybeUpdateProgressNotif(force) {
   const now = Date.now();
   if (!force && now - lastNotifUpdate < 1000) return;
@@ -451,7 +451,7 @@ document.addEventListener('webkitfullscreenchange', () => {
 function tick() {
   S.remain = Math.max(0, Math.round((S.endAt - Date.now())/1000));
   render();
-  maybeUpdateProgressNotif();
+  updateMediaSession();        // 系统媒体卡片实时刷新（不弹通知）；网页进度通知只在状态切换时弹一次
   if (S.remain <= 0) { onTimerEnd(); }
 }
 
