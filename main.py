@@ -37,7 +37,7 @@ DB_PATH = os.environ.get("DLPROMO_DB") or os.path.join(BASE_DIR, "pomodoro.db")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 KINDS = ("done", "skip", "abandon")
 MAX_DAYS = 730
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 6
 
 logging.basicConfig(
     level=logging.INFO,
@@ -78,6 +78,10 @@ def init_db() -> None:
                 )
                 """
             )
+            columns = {r["name"] for r in conn.execute("PRAGMA table_info(records)")}
+            if "session_id" not in columns:
+                conn.execute("ALTER TABLE records ADD COLUMN session_id TEXT")
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_records_session ON records(session_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_records_end ON records(end_at)")
             # 切出记录：逐条明细（时间 + 理由），session_meta 降级为按天汇总缓存
             conn.execute(
@@ -90,7 +94,15 @@ def init_db() -> None:
                 )
                 """
             )
+            quit_columns = {r["name"] for r in conn.execute("PRAGMA table_info(quit_logs)")}
+            if "event_id" not in quit_columns:
+                conn.execute("ALTER TABLE quit_logs ADD COLUMN event_id TEXT")
+            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_quit_event ON quit_logs(event_id)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_quit_date ON quit_logs(quit_at)")
+            conn.execute("""CREATE TABLE IF NOT EXISTS task_goals (
+                name TEXT PRIMARY KEY,
+                target_pomos INTEGER NOT NULL CHECK(target_pomos BETWEEN 1 AND 10000)
+            )""")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS quit_deletes (
@@ -126,9 +138,11 @@ def to_int(v: Any, default: Optional[int] = None) -> Optional[int]:
     """安全转整数，返回 None 表示无效。"""
     if v is None or v == "":
         return default
+    if isinstance(v, bool) or not isinstance(v, (int, str)):
+        return None
     try:
         return int(v)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
@@ -150,15 +164,14 @@ def validate_payload(p: dict) -> tuple[Optional[dict], Optional[str]]:
         return None, "kind 必须是 done / skip / abandon"
 
     planned = to_int(p.get("planned_minutes"))
-    if planned is None or planned <= 0:
-        return None, "planned_minutes 必须大于 0"
+    if planned is None or not 1 <= planned <= 600:
+        return None, "planned_minutes 必须为 1-600 的整数"
 
     # actual_minutes：缺省时 done/skip 用 planned，abandon 用 0
     if "actual_minutes" in p and p.get("actual_minutes") != "":
         actual = to_int(p.get("actual_minutes"), 0)
-        if actual is None:
-            return None, "actual_minutes 必须是整数"
-        actual = max(0, actual)
+        if actual is None or not 0 <= actual <= 600:
+            return None, "actual_minutes 必须为 0-600 的整数"
     else:
         actual = planned if kind != "abandon" else 0
 
@@ -176,7 +189,12 @@ def validate_payload(p: dict) -> tuple[Optional[dict], Optional[str]]:
     if kind == "abandon" and not reason:
         return None, "放弃记录必须填写原因"
 
+    session_id = p.get("session_id")
+    if session_id is not None and (not isinstance(session_id, str) or
+                                   not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id)):
+        return None, "session_id 格式无效"
     return {
+        "session_id": session_id,
         "kind": kind,
         "task": task,
         "planned_minutes": planned,
@@ -185,6 +203,15 @@ def validate_payload(p: dict) -> tuple[Optional[dict], Optional[str]]:
         "start_at": start_at,
         "end_at": end_at,
     }, None
+
+
+@app.before_request
+def validate_json_object():
+    if request.path.startswith("/api/") and request.method in ("POST", "PATCH", "PUT", "DELETE"):
+        if request.is_json:
+            body = request.get_json(silent=True)
+            if not isinstance(body, dict):
+                return jsonify(ok=False, error="请求体必须为 JSON 对象"), 400
 
 
 # ---------------------------------------------------------------- routes
@@ -251,14 +278,17 @@ def create_record():
         with conn:
             cur = conn.execute(
                 """INSERT INTO records
-                   (kind, task, planned_minutes, actual_minutes, reason, start_at, end_at)
-                   VALUES (?,?,?,?,?,?,?)""",
+                   (kind, task, planned_minutes, actual_minutes, reason, start_at, end_at, session_id)
+                   VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(session_id) DO NOTHING""",
                 (data["kind"], data["task"], data["planned_minutes"],
                  data["actual_minutes"], data["reason"],
-                 data["start_at"], data["end_at"]),
+                 data["start_at"], data["end_at"], data["session_id"]),
             )
             rid = cur.lastrowid
-        row = conn.execute("SELECT * FROM records WHERE id=?", (rid,)).fetchone()
+        if data["session_id"]:
+            row = conn.execute("SELECT * FROM records WHERE session_id=?", (data["session_id"],)).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM records WHERE id=?", (rid,)).fetchone()
         return jsonify(ok=True, data=dict(row))
     finally:
         conn.close()
@@ -278,7 +308,7 @@ def update_record(rid):
         # 合并：只覆盖请求中出现的字段
         merged = existing.copy()
         for key in ("kind", "task", "planned_minutes", "actual_minutes", "reason", "start_at", "end_at"):
-            if key in p and p.get(key) != "":
+            if key in p:
                 merged[key] = p[key]
 
         # 重新校验完整数据
@@ -323,7 +353,7 @@ def stats():
     tz_offset: 客户端时区偏移（分钟），用于计算今日/本周边界。
     days: 热力图窗口天数（7-730）。
     """
-    tz_off = request.args.get("tz_offset", default=0, type=int)
+    tz_off = min(max(request.args.get("tz_offset", default=0, type=int), -1440), 1440)
     days = request.args.get("days", default=365, type=int)
     days = min(max(days, 7), MAX_DAYS)
 
@@ -333,24 +363,28 @@ def stats():
 
     since = today - datetime.timedelta(days=days - 1)
     since_s = since.strftime("%Y-%m-%d") + " 00:00:00"
+    until_s = (today + datetime.timedelta(days=1)).strftime("%Y-%m-%d") + " 00:00:00"
 
     conn = get_db()
     try:
         # 窗口内记录
         rows = conn.execute(
             """SELECT kind, planned_minutes, actual_minutes, end_at
-               FROM records WHERE end_at >= ? ORDER BY end_at ASC""",
-            (since_s,),
+               FROM records WHERE end_at >= ? AND end_at < ? ORDER BY end_at ASC""",
+            (since_s, until_s),
         ).fetchall()
 
         daily = {}
         total_minutes = 0
+        actual_minutes = 0
         counts = {"done": 0, "skip": 0, "abandon": 0}
         for r in rows:
             date = r["end_at"][:10]
             d = daily.setdefault(date, {"date": date, "minutes": 0,
-                                         "count": 0, "abandons": 0})
+                                         "count": 0, "abandons": 0, "actual_minutes": 0})
             d["count"] += 1
+            d["actual_minutes"] += r["actual_minutes"]
+            actual_minutes += r["actual_minutes"]
             if r["kind"] == "abandon":
                 d["abandons"] += 1
             else:
@@ -359,45 +393,61 @@ def stats():
                 total_minutes += m
             counts[r["kind"]] += 1
 
-        # 生命周期总专注时长（不计放弃）
-        alltime_row = conn.execute(
-            "SELECT COALESCE(SUM(planned_minutes),0) AS m FROM records WHERE kind IN ('done','skip')"
-        ).fetchone()
-        alltime_minutes = alltime_row["m"]
-
+        # 独立于热力图窗口，统计截至客户端今日的全部有效专注日期。
+        history = {r["date"]: r["minutes"] for r in conn.execute(
+            """SELECT substr(end_at,1,10) AS date, SUM(planned_minutes) AS minutes
+               FROM records WHERE kind IN ('done','skip') AND end_at < ?
+               GROUP BY substr(end_at,1,10) ORDER BY date""", (until_s,)
+        )}
+        alltime_minutes = sum(history.values())
         monday = today - datetime.timedelta(days=today.weekday())
         today_s = today.strftime("%Y-%m-%d")
         monday_s = monday.strftime("%Y-%m-%d")
-        week_minutes = sum(v["minutes"] for k, v in daily.items() if k >= monday_s)
-        today_minutes = daily.get(today_s, {}).get("minutes", 0)
+        week_minutes = sum(v for k, v in history.items() if k >= monday_s)
+        today_minutes = history.get(today_s, 0)
 
-        # 最长连续专注天数（今天没专注则从昨天往前）
-        streak = 0
-        d = today
-        if daily.get(d.strftime("%Y-%m-%d"), {}).get("minutes", 0) == 0:
-            d = today - datetime.timedelta(days=1)
-        while daily.get(d.strftime("%Y-%m-%d"), {}).get("minutes", 0) > 0:
-            streak += 1
+        actual_history = {r["date"]: r["minutes"] for r in conn.execute(
+            """SELECT substr(end_at,1,10) AS date, SUM(actual_minutes) AS minutes
+               FROM records WHERE end_at < ? GROUP BY substr(end_at,1,10)""", (until_s,)
+        )}
+        current_streak = 0
+        d = today if history.get(today_s, 0) > 0 else today - datetime.timedelta(days=1)
+        while history.get(d.isoformat(), 0) > 0:
+            current_streak += 1
             d -= datetime.timedelta(days=1)
+        longest_streak = run = 0
+        previous = None
+        for date, minutes in history.items():
+            if minutes <= 0:
+                continue
+            d = datetime.date.fromisoformat(date)
+            run = run + 1 if previous is not None and (d - previous).days == 1 else 1
+            longest_streak = max(longest_streak, run)
+            previous = d
 
-        # 近 30 天日均
-        cut30 = (today - datetime.timedelta(days=29)).strftime("%Y-%m-%d")
-        last30 = sum(v["minutes"] for k, v in daily.items() if k >= cut30)
-        avg30 = round(last30 / 30, 1)
+        cut30 = (today - datetime.timedelta(days=29)).isoformat()
+        avg30 = round(sum(v for k, v in history.items() if k >= cut30) / 30, 1)
 
         daily_list = []
         for i in range(days):
             ds = (since + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
             daily_list.append(daily.get(ds, {"date": ds, "minutes": 0,
-                                             "count": 0, "abandons": 0}))
+                                             "count": 0, "abandons": 0, "actual_minutes": 0}))
 
         return jsonify(ok=True, data={
+            "actual_minutes": actual_minutes,
+            "today_actual_minutes": actual_history.get(today_s, 0),
+            "week_actual_minutes": sum(v for k, v in actual_history.items() if k >= monday_s),
+            "alltime_actual_minutes": sum(actual_history.values()),
+            "avg30_actual": round(sum(v for k, v in actual_history.items() if k >= cut30) / 30, 1),
             "today_minutes": today_minutes,
             "week_minutes": week_minutes,
             "total_minutes": total_minutes,
             "alltime_minutes": alltime_minutes,
             "counts": counts,
-            "streak": streak,
+            "streak": longest_streak,
+            "longest_streak": longest_streak,
+            "current_streak": current_streak,
             "avg30": avg30,
             "days": days,
             "daily": daily_list,
@@ -450,8 +500,13 @@ def record_quit():
     """
     quit_at = ""
     reason = ""
+    event_id = None
     if request.is_json:
         body = request.get_json() or {}
+        event_id = body.get("event_id")
+        if event_id is not None and (not isinstance(event_id, str) or
+                                    not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", event_id)):
+            return jsonify(ok=False, error="event_id 格式无效"), 400
         quit_at = str(body.get("quit_at") or "").strip()
         reason = str(body.get("reason") or "").strip()[:500]
     if not quit_at:
@@ -463,13 +518,16 @@ def record_quit():
     try:
         with conn:
             cur = conn.execute(
-                "INSERT INTO quit_logs (quit_at, reason) VALUES (?, ?)",
-                (quit_at, reason),
+                """INSERT INTO quit_logs (quit_at, reason, event_id) VALUES (?, ?, ?)
+                   ON CONFLICT(event_id) DO UPDATE SET
+                   reason = CASE WHEN excluded.reason != '' THEN excluded.reason ELSE quit_logs.reason END""",
+                (quit_at, reason, event_id),
             )
             rid = cur.lastrowid
-        row = conn.execute(
-            "SELECT id, quit_at, reason, created_at FROM quit_logs WHERE id = ?", (rid,)
-        ).fetchone()
+        if event_id:
+            row = conn.execute("SELECT * FROM quit_logs WHERE event_id = ?", (event_id,)).fetchone()
+        else:
+            row = conn.execute("SELECT * FROM quit_logs WHERE id = ?", (rid,)).fetchone()
     finally:
         conn.close()
     return jsonify(ok=True, data=dict(row))
@@ -581,18 +639,19 @@ def get_session_meta():
     """按天汇总切出次数（从 quit_logs 聚合）。?days=30 返回近 N 天。"""
     days = request.args.get("days", default=1, type=int)
     days = min(max(days, 1), 730)
-    tz_off = request.args.get("tz_offset", default=0, type=int)
+    tz_off = min(max(request.args.get("tz_offset", default=0, type=int), -1440), 1440)
     now = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=tz_off)
     today = now.date()
     since = today - datetime.timedelta(days=days - 1)
     since_s = since.strftime("%Y-%m-%d") + " 00:00:00"
+    until_s = (today + datetime.timedelta(days=1)).strftime("%Y-%m-%d") + " 00:00:00"
 
     conn = get_db()
     try:
         rows = {r["d"]: r["c"] for r in conn.execute(
             """SELECT substr(quit_at,1,10) AS d, COUNT(*) AS c
-               FROM quit_logs WHERE quit_at >= ? GROUP BY d""",
-            (since_s,),
+               FROM quit_logs WHERE quit_at >= ? AND quit_at < ? GROUP BY d""",
+            (since_s, until_s),
         ).fetchall()}
     finally:
         conn.close()
@@ -602,6 +661,118 @@ def get_session_meta():
         ds = (since + datetime.timedelta(days=i)).strftime("%Y-%m-%d")
         items.append({"date": ds, "quit_count": rows.get(ds, 0)})
     return jsonify(ok=True, data={"days": days, "items": items})
+
+
+# ---------------------------------------------------------------- insights / task map
+def client_date_window(default_days=30):
+    days = min(max(request.args.get("days", default=default_days, type=int), 1), MAX_DAYS)
+    offset = min(max(request.args.get("tz_offset", default=0, type=int), -1440), 1440)
+    today = (datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=offset)).date()
+    since = today - datetime.timedelta(days=days - 1)
+    until = today + datetime.timedelta(days=1)
+    return days, since.isoformat() + " 00:00:00", until.isoformat() + " 00:00:00"
+
+
+@app.get("/api/insights")
+def interruption_insights():
+    days, since, until = client_date_window()
+    conn = get_db()
+    try:
+        rows = conn.execute("SELECT quit_at, reason FROM quit_logs WHERE quit_at >= ? AND quit_at < ?",
+                            (since, until)).fetchall()
+        reasons = {}
+        hours = [0] * 24
+        daily = {}
+        unlabelled = 0
+        for row in rows:
+            reason = row["reason"].strip()
+            if not reason:
+                unlabelled += 1
+            else:
+                reasons[reason] = reasons.get(reason, 0) + 1
+            hours[int(row["quit_at"][11:13])] += 1
+            date = row["quit_at"][:10]
+            daily[date] = daily.get(date, 0) + 1
+        top = sorted(reasons.items(), key=lambda item: (-item[1], item[0]))[:5]
+        total = len(rows)
+        peak = max(range(24), key=lambda hour: hours[hour]) if total else None
+        return jsonify(ok=True, data={
+            "days": days, "total": total, "unlabelled": unlabelled,
+            "reasons": [{"reason": reason, "count": count} for reason, count in top],
+            "hours": [{"hour": h, "count": hours[h]} for h in range(24)],
+            "peak_hour": peak, "active_days": len(daily),
+            "average_per_day": round(total / days, 1),
+        })
+    finally:
+        conn.close()
+
+
+@app.get("/api/tasks")
+def list_tasks():
+    _, _, until = client_date_window()
+    conn = get_db()
+    try:
+        # 无目标的历史任务也展示；修改 / 删除记录后进度即时重新聚合。
+        rows = conn.execute("""WITH totals AS (
+            SELECT task AS name,
+                   SUM(CASE WHEN kind IN ('done','skip') THEN 1 ELSE 0 END) AS completed_pomos,
+                   SUM(CASE WHEN kind IN ('done','skip') THEN planned_minutes ELSE 0 END) AS credited_minutes,
+                   SUM(actual_minutes) AS actual_minutes,
+                   SUM(CASE WHEN kind='abandon' THEN 1 ELSE 0 END) AS abandons
+            FROM records WHERE task != '' AND end_at < ? GROUP BY task
+        ), names AS (SELECT name FROM task_goals UNION SELECT name FROM totals)
+        SELECT names.name, goals.target_pomos,
+               COALESCE(t.completed_pomos,0) AS completed_pomos,
+               COALESCE(t.credited_minutes,0) AS credited_minutes,
+               COALESCE(t.actual_minutes,0) AS actual_minutes,
+               COALESCE(t.abandons,0) AS abandons
+        FROM names LEFT JOIN task_goals goals ON goals.name=names.name
+                   LEFT JOIN totals t ON t.name=names.name
+        ORDER BY goals.target_pomos IS NULL, names.name""", (until,)).fetchall()
+        return jsonify(ok=True, data=[dict(row) for row in rows])
+    finally:
+        conn.close()
+
+
+@app.put("/api/tasks")
+def set_task_goal():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name")
+    target = to_int(body.get("target_pomos"))
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 200:
+        return jsonify(ok=False, error="任务名称必须为 1-200 个字符"), 400
+    if target is None or not 1 <= target <= 10000:
+        return jsonify(ok=False, error="预计番茄数必须为 1-10000 的整数"), 400
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute("""INSERT INTO task_goals(name,target_pomos) VALUES (?,?)
+                ON CONFLICT(name) DO UPDATE SET target_pomos=excluded.target_pomos""", (name.strip(), target))
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@app.delete("/api/tasks")
+def remove_task_goal():
+    body = request.get_json(silent=True) or {}
+    name = body.get("name")
+    if not isinstance(name, str) or not name.strip():
+        return jsonify(ok=False, error="请提供任务名称"), 400
+    conn = get_db()
+    try:
+        with conn:
+            conn.execute("DELETE FROM task_goals WHERE name=?", (name.strip(),))
+    finally:
+        conn.close()
+    return jsonify(ok=True)
+
+
+@app.get("/sw.js")
+def service_worker():
+    response = send_from_directory(STATIC_DIR, "sw.js")
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # ---------------------------------------------------------------- backup

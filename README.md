@@ -1,6 +1,6 @@
 # DLPromo · 番茄专注时钟（ТОМАТО-ЧАСЫ）
 
-一个轻量、自带后端的番茄工作法（Pomodoro）专注时钟，全部前端逻辑与样式内嵌于单个 HTML，后端为 Flask + SQLite。
+一个轻量、自带后端的番茄工作法（Pomodoro）专注时钟，前端使用独立的 HTML、CSS 和 JavaScript 文件，后端为 Flask + SQLite。
 
 ## 特性
 
@@ -32,7 +32,8 @@ python main.py
 ## 项目结构
 
 - `main.py` - Flask + SQLite 后端（CRUD API、统计聚合、热力图数据、CSV/JSON 导出）
-- `index.html` - 前端单页（样式 / 脚本 / DSEG7 字体全部内嵌）
+- `index.html` - 前端单页结构
+- `static/` - 脚本、样式与 DSEG7 字体
 - `requirements.txt` - Python 依赖
 - `test_api.py` - API 测试脚本
 
@@ -42,11 +43,59 @@ python main.py
 |---|---|---|
 | GET | `/api/health` | 健康检查 |
 | GET/POST | `/api/records` | 记录列表 / 新增记录 |
-| PUT/DELETE | `/api/records/<id>` | 更新 / 删除记录 |
+| PATCH/DELETE | `/api/records/<id>` | 更新 / 删除记录 |
 | GET | `/api/stats?days=N` | 统计聚合 |
-| GET | `/api/heatmap` | 热力图日数据 |
+| GET | `/api/insights?days=30` | 中断理由、小时分布与高发时段 |
+| GET/PUT/DELETE | `/api/tasks` | 任务进度 / 设置目标 / 移除目标 |
+| POST | `/api/quit` | 记录中断，支持 `event_id` 幂等更新理由 |
+| GET | `/sw.js` | 应用离线资源缓存 |
 | GET | `/api/export?format=csv\|json` | 导出 |
 
 ## 技术栈
 
 Flask · SQLite · 原生 JavaScript（无前端依赖）· DSEG7 字体（SIL OFL 许可）
+
+## 回归测试
+
+```bash
+python -m unittest -v
+# 前端核心逻辑测试，需 Node.js，无需安装 npm 依赖
+node --test test_frontend.cjs
+```
+
+记录新增 API 支持可选的 `session_id`（1-128 个字母、数字、下划线或连字符）。
+同一 ID 重试返回原记录，不重复入账；未传 ID 的旧客户端仍可新增记录。
+前端为每轮计时保存该 ID，离线记录暂存后进入休息，联网后同步。
+数据库启动时自动迁移到 schema v6，保留旧记录。
+
+计划时长范围为 1-600 分钟，实际时长为 0-600 分钟；JSON 请求体必须是对象。
+PATCH 可用空字符串清空任务和备注，放弃原因仍必填。
+统计只纳入截至客户端今日的记录；`days` 控制热力图和窗口计数，
+不影响近 30 日均与连续天数。`streak` / `longest_streak` 返回历史最长连续天数，
+`current_streak` 返回当前连续天数（今天尚未专注时从昨天开始计算）。
+
+
+## 四项新增功能
+
+- **双口径统计**：热力图上方可切换计划入账 / 实际投入，顶部今日、本周、累计与日均随口径切换。双口径面板同时显示两种累计与周期值。实际投入包含放弃前的运行时间，暂停不计入；跳过仍按计划入账，但保存真实运行分钟数。实际投入按分钟四舍五入，短于半分钟可为 0。历史旧记录无法还原当时的真实跳过时长，保持原值并在界面说明。
+- **中断洞察**：按近 7 / 30 / 90 天查看次数、常见理由、24 小时分布与高发时段。理由按完整文本归类。取消“返回后填写中断理由”可使用仅记次数的轻量模式。离线理由先保存到本机；事件唯一 ID 防止初次记录和补理由时重复计数。
+- **任务进度地图**：填写任务名称和预计番茄数，进度自动关联完全同名的专注记录。完成 / 跳过计入番茄数，放弃仅计实际投入。支持设置或修改目标、移除目标、选择任务开始专注。记录修改或删除后进度重新计算；移除目标不删除记录。
+- **离线应用体验**：首次联网打开并显示“离线打开已就绪”后，可断网刷新继续计时。记录、任务目标与中断事件先写入本机；顶部显示待同步数量，可立即同步，打开应用时恢复网络也会自动重试。统计与洞察离线展示最近的缓存，待同步记录在同步成功后纳入图表。编辑 / 删除已有专注记录仍需联网。关闭应用期间不承诺后台上传，重新打开后继续同步。
+
+PWA 与安装入口需 **HTTPS 或 localhost / 127.0.0.1**；普通局域网 HTTP 无法启用 Service Worker。
+可用浏览器“安装应用”或“添加到主屏幕”入口安装；浏览器未提供安装事件时页面不显示安装按钮。
+发布新版本时更新 `static/sw.js` 的缓存版本；更新等待旧窗口关闭后启用，避免计时中突然重载。
+应用只缓存页面、脚本、样式、字体和图标，不缓存 API 请求，防止断网写入被误判为成功。
+缓存与待同步数据属于当前浏览器，清理站点数据会移除本机未上传内容。
+
+数据库 v6 保留既有记录，新增 `task_goals` 表与中断 `event_id` 唯一索引。
+`/api/tasks` 的 PUT 请求体为 `{"name":"报告","target_pomos":4}`，DELETE 请求体为 `{"name":"报告"}`。
+`/api/insights` 与 `/api/tasks` 接受 `tz_offset`，与原统计接口采用相同的客户端日历日期口径。
+
+可选浏览器端回归检查（使用临时数据库，自动启动与关闭测试服务）：
+
+```bash
+pip install playwright
+python -m playwright install chromium
+python scripts/check_browser.py
+```

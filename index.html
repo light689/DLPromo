@@ -7,6 +7,8 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>DLPromo · 番茄专注时钟</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23e01f26'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23ffd100'/%3E%3C/svg%3E">
+<link rel="manifest" href="/static/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icon-192.png">
 <link rel="stylesheet" href="/static/style.css">
 </head>
 <body data-mode="focus">
@@ -63,9 +65,16 @@
     <div class="chip"><span class="chip-l">总计</span><b id="chipTotal">0m</b></div>
     <div class="chip chip-focus" title="今日累计离开页面 / 切后台次数"><span class="chip-l">切出</span><b id="chipQuit">0次</b></div>
   </div>
-  <span class="net" id="netState">在线</span>
+  <span class="net" id="netState" role="status">在线</span>
+  <button class="btn btn-sm btn-ghost" id="btnInstall" hidden>安装应用</button>
   <button class="btn btn-sm btn-ghost" id="btnQuit" title="安全退出：不会记为切出">退出</button>
 </header>
+
+<div class="sync-strip" role="status" aria-live="polite">
+  <span id="syncStatus">本地记录已同步</span>
+  <button class="btn btn-sm" id="btnSync">立即同步</button>
+  <span id="offlineReady">离线资源准备中…</span>
+</div>
 
 <!-- 主网格 -->
 <main class="layout" style="max-width:1200px;">
@@ -112,7 +121,9 @@
       <label><input type="checkbox" id="optAutoFocus"> 休息后自动专注</label>
       <label><input type="checkbox" id="optSound" checked> 提示音</label>
       <label><input type="checkbox" id="optNotify"> 系统通知</label>
+      <label><input type="checkbox" id="optRequireReason" checked> 返回后填写中断理由</label>
     </div>
+    <p class="feature-note">关闭理由提示后仅记录次数；离线填写的理由会先保存在本机。</p>
     <div class="kbd-hint">快捷键：空格=开始/暂停 · E=结束</div>
   </section>
 
@@ -122,6 +133,10 @@
     <!-- 热力图 -->
     <section class="panel">
       <div class="panel-head"><span class="ph-sq"></span> 专注热力图 // ТЕПЛОВАЯ КАРТА <span class="head-acts"><button class="btn btn-sm" id="btnRefresh">⟳ 刷新</button></span></div>
+      <div class="metric-controls" role="group" aria-label="统计口径">
+        <button class="btn btn-sm active" data-metric="credited">计划入账</button>
+        <button class="btn btn-sm" data-metric="actual">实际投入</button>
+      </div>
       <div class="hm-box">
         <div class="hm-days"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
         <div class="hm-cols" id="hmCols"></div>
@@ -156,6 +171,37 @@
         <div class="st"><span class="st-l">近30日均</span><b id="statAvg">0分</b></div>
         <div class="st"><span class="st-l">累计时长</span><b id="statTotal2">0</b></div>
       </div>
+    </section>
+
+    <section class="panel" aria-labelledby="dualTitle">
+      <div class="panel-head" id="dualTitle"><span class="ph-sq"></span> 双口径专注 // ДВА ВЗГЛЯДА</div>
+      <div class="dual-grid">
+        <div class="dual-card"><h2>计划入账</h2><b id="dualCredited">0m</b><p>完成与跳过按计划时长入账</p></div>
+        <div class="dual-card actual"><h2>实际投入</h2><b id="dualActual">0m</b><p>运行时长，包含放弃前的投入</p></div>
+      </div>
+      <div id="dualPeriods" class="dual-periods"></div>
+      <p class="feature-note">累计口径，待同步记录在同步成功后纳入图表。旧版本的跳过记录未保留真实运行时长，仍沿用原值；新增记录按实际计时保存。实际时长以分钟四舍五入。</p>
+    </section>
+
+    <section class="panel" aria-labelledby="insightTitle">
+      <div class="panel-head" id="insightTitle"><span class="ph-sq red"></span> 中断洞察 // ПЕРЕРЫВЫ
+        <label class="head-acts">范围 <select id="insightDays" aria-label="中断分析范围"><option value="7">近7天</option><option value="30" selected>近30天</option><option value="90">近90天</option></select></label>
+      </div>
+      <p id="insightSummary" class="feature-note">暂无中断数据</p>
+      <h3 class="feature-heading">常见理由</h3><div id="insightReasons"></div>
+      <h3 class="feature-heading">一天中的中断时段</h3><div id="insightHours" class="hour-chart" role="img" aria-label="24小时中断分布"></div>
+      <p id="insightAdvice" class="feature-note"></p>
+    </section>
+
+    <section class="panel" aria-labelledby="taskMapTitle">
+      <div class="panel-head" id="taskMapTitle"><span class="ph-sq"></span> 任务进度地图 // КАРТА ЗАДАЧ</div>
+      <form id="taskGoalForm" class="task-goal-form">
+        <label>任务名称<input id="goalName" maxlength="200" required placeholder="例如：完成课程报告" list="taskList"></label>
+        <label>预计番茄数<input id="goalTarget" type="number" min="1" max="10000" value="4" required></label>
+        <button class="btn btn-red" type="submit">保存目标</button>
+      </form>
+      <p class="feature-note">同名记录自动汇总。完成与跳过计入番茄数，实际投入包含放弃时长；移除目标保留历史记录。</p>
+      <div id="taskMap" class="task-map"></div>
     </section>
 
     <!-- 记录 -->
@@ -240,7 +286,7 @@
           </select>
         </label>
         <label>计划时长(分)<input type="number" id="ePlanned" min="1" max="600"></label>
-        <label>实际时长(分)<input type="number" id="eActual" min="1" max="600"></label>
+        <label>实际时长(分)<input type="number" id="eActual" min="0" max="600"></label>
         <label>任务<input type="text" id="eTask" maxlength="200"></label>
         <label>开始时间<input type="datetime-local" id="eStart"></label>
         <label>结束时间<input type="datetime-local" id="eEnd"></label>
@@ -366,6 +412,7 @@
 
 
 
+<script src="/static/features.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

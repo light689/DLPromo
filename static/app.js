@@ -29,7 +29,7 @@ function level(min) {
 // ---- 状态 ----
 const DEFAULTS = {
   durations: { focus:25, short:5, long:15 },
-  opts: { autoShort:false, autoFocus:false, sound:true, notify:false, longEvery:4 }
+  opts: { autoShort:false, autoFocus:false, sound:true, notify:false, longEvery:4, requireReason:true }
 };
 let S = null;              // 计时器状态
 let RECS = [];             // 已加载记录
@@ -45,6 +45,12 @@ let visibilityHidden = false;
 let saving = false;        // 防止重复提交
 const TIMER_KEY = 'tomato_timer';
 const PENDING_KEY = 'pomo_pending';
+let flushing = null;
+function newSessionId() {
+  return globalThis.crypto?.randomUUID?.() ||
+    Date.now().toString(36)+'-'+Math.random().toString(36).slice(2)+'-'+Math.random().toString(36).slice(2);
+}
+
 
 function initState() {
   const saved = JSON.parse(localStorage.getItem('tomato_settings') || '{}');
@@ -59,6 +65,7 @@ function initState() {
     tickId: null,
     startedAt: null,
     acc: 0,               // 已累计的运行秒数（排除暂停）
+    sessionId: null,
     segStart: null,       // 当前运行段的开始时间
     round: saved.round || 0,
     durations: dur,
@@ -82,7 +89,7 @@ function saveTimerState() {
   }
   localStorage.setItem(TIMER_KEY, JSON.stringify({
     mode: S.mode, total: S.total, remain: S.remain, running: S.running,
-    endAt: S.endAt, acc: S.acc,
+    endAt: S.endAt, acc: S.acc, segStart: S.segStart, sessionId: S.sessionId,
     startedAt: S.startedAt ? S.startedAt.getTime() : null,
     round: S.round, task: $('#taskInput').value,
   }));
@@ -94,20 +101,31 @@ function maybeResume() {
   let snap;
   try { snap = JSON.parse(raw); } catch(e) { localStorage.removeItem(TIMER_KEY); return; }
   if (!snap || !snap.startedAt) return;
+  const settled = readLocal(PENDING_KEY, []).find(record => record.session_id === snap.sessionId);
+  if (settled) {
+    S.round = snap.round || 0;
+    afterRecord(settled.kind);
+    return;
+  }
   S.mode = snap.mode || 'focus';
   S.total = snap.total || S.durations[S.mode]*60;
   S.remain = snap.remain;
   S.acc = snap.acc || 0;
+  S.sessionId = snap.sessionId || newSessionId();
   S.round = snap.round || 0;
   S.startedAt = new Date(snap.startedAt);
   $('#taskInput').value = snap.task || '';
   if (snap.running && snap.endAt) {
-    S.remain = Math.max(0, Math.round((snap.endAt - Date.now())/1000));
+    const now = Date.now();
+    S.remain = Math.max(0, Math.round((snap.endAt - now)/1000));
+    // 旧快照未保存 segStart，可从运行段截止时间与剩余秒数推导。
+    const segStart = snap.segStart ?? (snap.endAt - snap.remain*1000);
+    S.acc = Math.min(S.total, S.acc + Math.max(0, (Math.min(now, snap.endAt) - segStart)/1000));
   }
   saveSettings();
+  saveTimerState();
   if (S.remain <= 0) {
     // 离开期间已到期：专注则自动入账，休息则直接重置
-    localStorage.removeItem(TIMER_KEY);
     if (S.mode === 'focus') { S.running = false; render(); autoSettleDone(); }
     else { S.mode = 'focus'; resetTimer(); }
     return;
@@ -124,6 +142,7 @@ async function api(path, opts={}) {
   try {
     res = await fetch(path, {
       method: opts.method || 'GET',
+      signal: AbortSignal.timeout(8000),
       headers: { 'Content-Type': 'application/json' },
       body: opts.body ? JSON.stringify(opts.body) : undefined,
     });
@@ -141,6 +160,7 @@ function setNet(ok) {
   offline = !ok;
   document.body.classList.toggle('offline', offline);
   $('#netState').textContent = offline ? '离线' : '在线';
+  updateSyncStatus();
 }
 
 // ---- 提示 ----
@@ -465,6 +485,7 @@ function startTimer() {
   S.endAt = Date.now() + S.remain*1000;
   S.segStart = Date.now();
   if (!S.startedAt) S.startedAt = new Date();
+  if (!S.sessionId) S.sessionId = newSessionId();
   S.tickId = setInterval(tick, 200);
   // 请求通知权限并常驻显示剩余进度
   if (notifEnabled() && Notification.permission === 'default') {
@@ -497,6 +518,7 @@ function resetTimer() {
   S.total = S.durations[S.mode]*60;
   S.remain = S.total;
   S.startedAt = null;
+  S.sessionId = null;
   S.acc = 0;
   S.segStart = null;
   saveTimerState();
@@ -575,9 +597,9 @@ function openEndModal(early) {
   const planned = S.durations.focus;
   let elapsedMin = planned;
   if (early && S.startedAt) {
-    elapsedMin = Math.max(1, Math.round(actualElapsedSeconds()/60));
+    elapsedMin = Math.max(0, Math.min(planned, Math.round(actualElapsedSeconds()/60)));
   }
-  PENDING = { early, planned, elapsedMin: elapsedMin || planned };
+  PENDING = { early, planned, elapsedMin: elapsedMin };
   $('#endTitle').textContent = early ? '提前结束 // РАНО' : '计时结束 // ГОТОВО';
   $('#endDesc').innerHTML = early
     ? '本轮计划 <b>'+planned+'</b> 分钟 · 已实际专注 <b>'+elapsedMin+'</b> 分钟<br>请选择结算方式：'
@@ -595,7 +617,7 @@ function openEndModal(early) {
 }
 
 function recordDone() { saveRecord('done', PENDING.planned, PENDING.planned, ''); }
-function recordSkip() { saveRecord('skip', PENDING.planned, PENDING.planned, ''); }
+function recordSkip() { saveRecord('skip', PENDING.planned, PENDING.elapsedMin, ''); }
 function recordAbandon() {
   closeModal('endModal');
   $('#abInfo').innerHTML = '计划 <b>'+PENDING.planned+'</b> 分钟 · 实际专注 <b>'+PENDING.elapsedMin+'</b> 分钟<br><span style="color:var(--red)">不计入总专注时间</span>';
@@ -606,24 +628,45 @@ function recordAbandon() {
 // ---- 离线写入队列 ----
 function queueRecord(payload) {
   const q = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
-  q.push(payload);
+  const index = q.findIndex(record => record.session_id === payload.session_id);
+  if (index >= 0) q[index] = payload;
+  else q.push(payload);
   localStorage.setItem(PENDING_KEY, JSON.stringify(q));
+  updateSyncStatus();
+  renderRecords();
 }
 
-async function flushQueue() {
-  const q = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
-  if (!q.length) return;
-  const rest = [];
-  for (const p of q) {
-    const r = await api('/api/records', { method:'POST', body:p });
-    if (!(r && r.ok)) rest.push(p);
-  }
-  if (rest.length) {
-    localStorage.setItem(PENDING_KEY, JSON.stringify(rest));
-  } else {
-    localStorage.removeItem(PENDING_KEY);
-    toast('离线记录已同步','ok');
-  }
+function flushQueue() {
+  if (flushing) return flushing;
+  const run = async () => {
+    // 先持久化旧队列的 ID，确保失败后重试使用同一个幂等键。
+    const queue = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    if (!queue.length) return;
+    for (const payload of queue) {
+      if (!payload.session_id) payload.session_id = newSessionId();
+    }
+    localStorage.setItem(PENDING_KEY, JSON.stringify(queue));
+    let synced = false;
+    for (const payload of queue) {
+      const result = await api('/api/records', { method:'POST', body:payload });
+      if (!result?.ok) { syncError = result?.error || '同步暂未完成'; continue; }
+      syncError = '';
+      // 重新读取，保留上传期间新加入的记录。
+      const rest = JSON.parse(localStorage.getItem(PENDING_KEY) || '[]')
+        .filter(p => p.session_id !== payload.session_id);
+      if (rest.length) localStorage.setItem(PENDING_KEY, JSON.stringify(rest));
+      else localStorage.removeItem(PENDING_KEY);
+      synced = true;
+      updateSyncStatus();
+    }
+    if (synced) {
+      toast('离线记录已同步','ok');
+      await Promise.all([loadRecords(), loadStats(), loadTasks()]);
+    }
+  };
+  flushing = run().finally(() => { flushing = null; updateSyncStatus(); });
+  updateSyncStatus();
+  return flushing;
 }
 
 async function saveRecord(kind, planned, actual, reason) {
@@ -632,15 +675,23 @@ async function saveRecord(kind, planned, actual, reason) {
   try {
     const end = new Date();
     const start = S.startedAt || end;
+    if (!S.sessionId) S.sessionId = newSessionId();
     const payload = {
+      session_id: S.sessionId,
       kind, task: $('#taskInput').value.trim(),
       planned_minutes: planned, actual_minutes: actual, reason,
       start_at: fmtDT(start), end_at: fmtDT(end)
     };
     closeModal('endModal');
     closeModal('abandonModal');
+    // 发请求前先持久化，关闭页面或响应丢失后仍能安全重试。
+    queueRecord(payload);
     const res = await api('/api/records', { method:'POST', body: payload });
     if (res && res.ok) {
+      const rest = readLocal(PENDING_KEY, []).filter(record => record.session_id !== payload.session_id);
+      if (rest.length) localStorage.setItem(PENDING_KEY, JSON.stringify(rest));
+      else localStorage.removeItem(PENDING_KEY);
+      updateSyncStatus();
       if (kind === 'abandon') {
         toast('已记录放弃（'+actual+' 分钟，不计入总时长）','warn');
       } else {
@@ -650,11 +701,13 @@ async function saveRecord(kind, planned, actual, reason) {
       refreshAll();
     } else if (res && res.error === '无法连接后端') {
       // 离线：入队，联网后自动同步
-      queueRecord(payload);
+      afterRecord(kind);
       toast('已离线暂存，联网后自动同步','warn');
     } else {
       toast('保存失败：'+(res&&res.error||'网络错误'),'err');
     }
+  } catch (error) {
+    toast('本机保存失败，请检查浏览器存储空间后重试','err');
   } finally {
     saving = false;
   }
@@ -662,6 +715,7 @@ async function saveRecord(kind, planned, actual, reason) {
 
 function afterRecord(kind) {
   S.startedAt = null;
+  S.sessionId = null;
   S.acc = 0;
   S.segStart = null;
   if (kind !== 'abandon') S.round++;
@@ -678,11 +732,10 @@ function afterRecord(kind) {
 
 // ---- 数据刷新 ----
 async function refreshAll() {
-  await Promise.all([loadRecords(), loadStats(), loadQuit()]);
+  await Promise.all([loadRecords(), loadStats(), loadQuit(), loadFeatures()]);
   updateTaskList();
   render();
-  flushQueue();
-  renderQuitHeatmap();
+  await Promise.all([flushQueue(), flushAuxQueue(), renderQuitHeatmap()]);
 }
 
 async function loadRecords() {
@@ -692,10 +745,14 @@ async function loadRecords() {
   if (j.ok) {
     REC_TOTAL = j.total;
     RECS = REC_OFFSET === 0 ? j.data : RECS.concat(j.data);
-    localStorage.setItem('pomo_recs', JSON.stringify(RECS));
+    localStorage.setItem('pomo_recs_'+F.kind, JSON.stringify(RECS));
+    localStorage.setItem('pomo_total_'+F.kind, String(REC_TOTAL));
+    if (F.kind==='all') localStorage.setItem('pomo_recs', JSON.stringify(RECS));
     $('#btnLoadMore').style.display = RECS.length < REC_TOTAL ? '' : 'none';
   } else {
-    try { RECS = JSON.parse(localStorage.getItem('pomo_recs')||'[]'); } catch(e) { RECS=[]; }
+    RECS = readLocal('pomo_recs_'+F.kind,readLocal('pomo_recs',[])).filter(r => F.kind==='all' || r.kind===F.kind);
+    REC_TOTAL = Number(localStorage.getItem('pomo_total_'+F.kind)) || RECS.length;
+    $('#btnLoadMore').style.display = 'none';
   }
   renderRecords();
 }
@@ -716,18 +773,20 @@ async function loadStats() {
 // ---- 渲染记录 ----
 function renderRecords() {
   const tbody = $('#recBody');
-  if (RECS.length === 0) {
+  const queued = readLocal(PENDING_KEY, []).filter(r => F.kind === 'all' || r.kind === F.kind);
+  const queuedRows = queued.map(r => '<tr><td>'+escapeHtml(r.end_at)+'<span class="c-time">待同步</span></td><td>'+KIND_CN[r.kind]+'</td><td>'+escapeHtml(r.task||'—')+'</td><td>计划 '+r.planned_minutes+' / 实际 '+r.actual_minutes+'分</td><td>'+escapeHtml(r.reason)+'</td><td>本机暂存</td></tr>').join('');
+  if (RECS.length === 0 && !queued.length) {
     tbody.innerHTML = '';
     $('#recEmpty').style.display = '';
     $('#recCount').textContent = '';
     return;
   }
   $('#recEmpty').style.display = 'none';
-  $('#recCount').textContent = '共 '+REC_TOTAL+' 条';
-  tbody.innerHTML = RECS.map(r => {
+  $('#recCount').textContent = '已同步 '+REC_TOTAL+' 条'+(queued.length?' · '+queued.length+' 条待同步':'');
+  tbody.innerHTML = queuedRows + RECS.map(r => {
     const d = r.end_at.slice(0,10).replace(/-/g,'/');
     const t = r.start_at.slice(11,16)+'–'+r.end_at.slice(11,16);
-    const min = r.kind==='abandon' ? r.actual_minutes+'分' : r.planned_minutes+'分';
+    const min = '计划 '+(r.kind==='abandon'?0:r.planned_minutes)+' / 实际 '+r.actual_minutes+'分';
     const reason = r.reason
       ? '<span class="rec-reason" title="'+escapeHtml(r.reason)+'">「'+escapeHtml(r.reason).slice(0,14)+'」</span>'
       : '';
@@ -746,16 +805,18 @@ function renderRecords() {
 function renderStats() {
   if (!STATS) return;
   const c = STATS.counts || {};
-  $('#chipToday').textContent = fmtHM(STATS.today_minutes);
-  $('#chipWeek').textContent = fmtHM(STATS.week_minutes);
-  const alltime = STATS.alltime_minutes != null ? STATS.alltime_minutes : STATS.total_minutes;
+  const actual = metric === 'actual';
+  $('#chipToday').textContent = fmtHM((actual ? STATS.today_actual_minutes : STATS.today_minutes)||0);
+  $('#chipWeek').textContent = fmtHM((actual ? STATS.week_actual_minutes : STATS.week_minutes)||0);
+  const alltime = (actual ? STATS.alltime_actual_minutes : STATS.alltime_minutes)||0;
   $('#chipTotal').textContent = fmtHM(alltime);
   $('#statDone').textContent = c.done||0;
   $('#statSkip').textContent = c.skip||0;
   $('#statAbandon').textContent = c.abandon||0;
   $('#statStreak').textContent = STATS.streak+' 天';
-  $('#statAvg').textContent = STATS.avg30+' 分';
+  $('#statAvg').textContent = (actual ? STATS.avg30_actual||0 : STATS.avg30)+' 分';
   $('#statTotal2').textContent = fmtHM(alltime);
+  renderDualStats();
 }
 
 // ---- 渲染热力图 ----
@@ -764,7 +825,7 @@ function renderHeatmap() {
   if (!daily.length) return;
   const map = {};
   let active=0, sum=0;
-  daily.forEach(d => { map[d.date]=d.minutes; if(d.minutes>0){active++; sum+=d.minutes;} });
+  daily.forEach(d => { const min = metric === 'actual' ? d.actual_minutes||0 : d.minutes; map[d.date]=min; if(min>0){active++; sum+=min;} });
   const end = new Date(); end.setHours(0,0,0,0);
   const start = new Date(end); start.setDate(end.getDate()-(daily.length-1));
   const dow = start.getDay(); if (dow!==0) start.setDate(start.getDate()-dow);
@@ -786,7 +847,7 @@ function renderHeatmap() {
     html += '<div class="hm-col">'+cells.join('')+'<div class="hm-ml">'+label+'</div></div>';
   }
   $('#hmCols').innerHTML = html;
-  $('#hmInfo').textContent = daily.length+' 天 · 专注 '+active+' 天 · 合计 '+fmtHM(sum);
+  $('#hmInfo').textContent = (metric==='actual'?'实际投入 · ':'计划入账 · ')+daily.length+' 天 · 专注 '+active+' 天 · 合计 '+fmtHM(sum);
 }
 
 // ---- 日详情 ----
@@ -833,21 +894,18 @@ function openEdit(rec) {
 }
 
 function syncActualField() {
-  const k = $('#eKind').value;
-  const dis = k !== 'abandon';
-  $('#eActual').disabled = dis;
-  if (dis) $('#eActual').value = $('#ePlanned').value;
+  // 两种口径独立，所有类型都允许修正实际投入。
+  $('#eActual').disabled = false;
 }
 
 $('#eKind').addEventListener('change', syncActualField);
-$('#ePlanned').addEventListener('input', () => {
-  if ($('#eKind').value !== 'abandon') $('#eActual').value = $('#ePlanned').value;
-});
+
 
 async function saveEdit() {
   const kind = $('#eKind').value;
   const planned = parseInt($('#ePlanned').value) || 0;
-  const actual = parseInt($('#eActual').value) || planned;
+  const parsedActual = parseInt($('#eActual').value);
+  const actual = Number.isNaN(parsedActual) ? planned : parsedActual;
   const task = $('#eTask').value.trim();
   const reason = $('#eReason').value.trim();
   const start = $('#eStart').value.replace('T',' ')+':00';
@@ -934,7 +992,7 @@ document.addEventListener('keydown', e => {
 
 // ---- 任务列表 ----
 function updateTaskList() {
-  const tasks = [...new Set(RECS.map(r => r.task).filter(Boolean))].slice(0,20);
+  const tasks = [...new Set([...taskView().map(r => r.name), ...RECS.map(r => r.task)].filter(Boolean))].slice(0,100);
   $('#taskList').innerHTML = tasks.map(t => '<option value="'+escapeHtml(t)+'">').join('');
 }
 
@@ -973,9 +1031,11 @@ function onPageHidden() {
   // 理由尚未填写期间，本次切出不重复跟踪（避免待填理由堆积）；时间上不做冷却
   if (!localStorage.getItem(PENDING_QUIT_KEY)) {
     const t = quitLocalNow();
-    localStorage.setItem(PENDING_QUIT_KEY, t);
+    const event = {event_id:newSessionId(), quit_at:t, reason:''};
+    if (S.opts.requireReason !== false) localStorage.setItem(PENDING_QUIT_KEY, JSON.stringify(event));
+    queueAux('quit',event);
     try {
-      const payload = JSON.stringify({ quit_at: t });
+      const payload = JSON.stringify(event);
       if (navigator.sendBeacon) {
         navigator.sendBeacon('/api/quit', new Blob([payload], { type: 'application/json' }));
       } else {
@@ -1005,7 +1065,8 @@ function onPageVisible() {
   }
   // 仅当确实记录了切出（仍有未填理由的待处理项）时才弹激励模态；
   // 冷却期内被拦截的切出不弹窗，避免 saveBackReason 兜底新建记录绕过冷却
-  if (localStorage.getItem(PENDING_QUIT_KEY)) showBackModal();
+  if (S.opts.requireReason !== false && localStorage.getItem(PENDING_QUIT_KEY)) showBackModal();
+  else { flushAuxQueue(); toast('已记录中断，点击开始继续专注','warn'); }
 }
 
 // 切出回来：弹窗激励 + 填理由（专注模式必须填理由）
@@ -1038,31 +1099,23 @@ function showBackModal() {
 // 保存失败保留待填状态以便重试（专注必须填）
 async function saveBackReason() {
   const reason = $('#backReason').value.trim();
-  if (!reason) { $('#backReason').focus(); toast('专注切出必须填写理由','warn'); return; }
-  const quitAt = localStorage.getItem(PENDING_QUIT_KEY);
-  const list = await api('/api/quit_logs?limit=100');
-  const match = list && list.ok && list.data && quitAt
-    ? list.data.find(r => !r.reason && r.quit_at === quitAt)
-    : null;
-  let saved = false;
-  if (match) {
-    const r = await api('/api/quit_logs/'+match.id, { method:'PATCH', body:{ reason } });
-    saved = !!(r && r.ok);
-  } else {
-    const body = { reason };
-    if (quitAt) body.quit_at = quitAt;
-    const r = await api('/api/quit', { method:'POST', body });
-    saved = !!(r && r.ok);
-  }
-  if (!saved) {
-    toast('保存失败，请联网后重试（理由已被保留）','err');
-    $('#backReason').focus();
-    return;
-  }
+  if (!reason) { $('#backReason').focus(); toast('请填写切出理由','warn'); return; }
+  const event = pendingQuit();
+  if (!event) { closeModal('backModal'); return; }
+  if (event.legacy) {
+    // 兼容升级前仅保存时间字符串的待填事件。
+    const list = await api('/api/quit_logs?limit=500');
+    if (!list.ok) { toast('旧记录需联网后补充理由','warn'); return; }
+    const match = list.data.find(row => row.quit_at === event.quit_at && !row.reason);
+    if (match) {
+      const result = await api('/api/quit_logs/'+match.id,{method:'PATCH',body:{reason}});
+      if (!result.ok) { toast(result.error,'err'); return; }
+    } else queueAux('quit',{event_id:newSessionId(),quit_at:event.quit_at,reason});
+  } else queueAux('quit',{...event,reason});
   localStorage.removeItem(PENDING_QUIT_KEY);
   closeModal('backModal');
-  refreshAll();
-  toast('切出理由已记录','ok');
+  toast('中断理由已保存在本机','ok');
+  await flushAuxQueue();
 }
 
 // ---- Screen Wake Lock（专注时屏幕常亮） ----
@@ -1205,7 +1258,7 @@ window.addEventListener('beforeunload', e => {
 window.addEventListener('pagehide', saveTimerState);
 
 // 网络恢复时同步离线队列
-window.addEventListener('online', () => { flushQueue(); refreshAll(); });
+window.addEventListener('online', refreshAll);
 
 // ---- 设置事件绑定 ----
 function bindEvents() {
@@ -1340,6 +1393,7 @@ function bindEvents() {
 
 // ---- 启动 ----
 bindEvents();
+initFeatures();
 buildRingTicks();
 render();
 maybeResume();
