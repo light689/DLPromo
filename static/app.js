@@ -1138,11 +1138,13 @@ function doQuit() {
   if (S && S.running) pauseTimer();
   releaseWakeLock();
   localStorage.removeItem(PENDING_QUIT_KEY);
-  $('#shutdownLayer').classList.add('open');
-}
-function cancelQuit() {
-  $('#shutdownLayer').classList.remove('open');
-  exiting = false;
+  const shutdown = $('#shutdownLayer');
+  shutdown.classList.add('open');
+  shutdown.focus({preventScroll:true});
+  // 关机后禁用底层界面，避免键盘操作重新进入计时器。
+  for (const element of document.body.children) {
+    if (element !== shutdown) element.inert = true;
+  }
 }
 
 // ---- 切出热力图（红色警示） ----
@@ -1375,8 +1377,6 @@ function bindEvents() {
   });
   // 退出按钮（黑屏关机）
   $('#btnQuit').addEventListener('click', doQuit);
-  // 退出黑屏点击恢复
-  $('#shutdownLayer').addEventListener('click', cancelQuit);
   // 删除切出记录确认
   $('#delQuitCancel').addEventListener('click', () => closeModal('delQuitModal'));
   $('#delQuitConfirm').addEventListener('click', async () => {
