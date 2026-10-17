@@ -9,7 +9,9 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23e01f26'/%3E%3Ccircle cx='8' cy='8' r='4' fill='%23ffd100'/%3E%3C/svg%3E">
 <link rel="manifest" href="/static/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/static/icon-192.png">
+<script src="/static/theme.js"></script>
 <link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/themes.css">
 </head>
 <body data-mode="focus">
 
@@ -18,8 +20,14 @@
   <div class="boot-panel">
     <div class="boot-mark"><span class="sq red"></span><span class="sq yellow"></span><span class="sq black"></span></div>
     <div class="boot-title">DLPromo</div>
-    <div class="boot-sub">番茄专注时钟 · ТОМАТО-ЧАСЫ</div>
-    <div class="boot-slogan">专注即生产 · 时间即材料 · 记录即档案</div>
+    <div class="boot-sub"><span data-pixel-copy="留一点时间，专心做事。">番茄专注时钟 · ТОМАТО-ЧАСЫ</span></div>
+    <div class="boot-slogan"><span data-pixel-copy="一次专注，一点进展。">专注即生产 · 时间即材料 · 记录即档案</span></div>
+    <label class="theme-picker boot-theme">外观
+      <select aria-label="启动页主题" data-theme-select>
+        <option value="pixel">Pixel · 鼠尾草</option>
+        <option value="constructivist">构成主义主题</option>
+      </select>
+    </label>
     <button class="btn btn-red big" id="bootEnter">进入番茄钟</button>
     <div class="boot-tip">进入后请保持页面在前台，专注计时期间切出将被记录</div>
   </div>
@@ -55,8 +63,8 @@
   <div class="brand">
     <div class="brand-mark"><span class="sq red"></span><span class="sq yellow"></span><span class="sq black"></span></div>
     <div>
-      <h1>DLPromo <span class="cn">番茄专注时钟 · ТОМАТО-ЧАСЫ</span></h1>
-      <p class="slogan">专注即生产 · 时间即材料 · 记录即档案</p>
+      <h1>DLPromo <span class="cn"><span data-pixel-copy="留一点时间，专心做事。">番茄专注时钟 · ТОМАТО-ЧАСЫ</span></span></h1>
+      <p class="slogan"><span data-pixel-copy="一次专注，一点进展。">专注即生产 · 时间即材料 · 记录即档案</span></p>
     </div>
   </div>
   <div class="chips">
@@ -66,6 +74,12 @@
     <div class="chip chip-focus" title="今日累计离开页面 / 切后台次数"><span class="chip-l">切出</span><b id="chipQuit">0次</b></div>
   </div>
   <span class="net" id="netState" role="status">在线</span>
+  <label class="theme-picker">主题
+    <select aria-label="主题" data-theme-select>
+      <option value="pixel">Pixel · 鼠尾草</option>
+      <option value="constructivist">构成主义主题</option>
+    </select>
+  </label>
   <button class="btn btn-sm btn-ghost" id="btnInstall" hidden>安装应用</button>
   <button class="btn btn-sm btn-ghost" id="btnQuit" title="安全退出：不会记为切出">退出</button>
 </header>
@@ -81,7 +95,7 @@
 
   <!-- 左：计时器 -->
   <section class="panel timer-panel">
-    <div class="panel-head"><span class="ph-sq"></span> 计时器 // ТАЙМЕР <span class="head-acts"><button class="btn btn-sm btn-ghost" id="btnFullscreen">全屏</button></span></div>
+    <div class="panel-head"><span class="ph-sq"></span> <span data-pixel-copy="现在，专注一件事">计时器 // ТАЙМЕР</span> <span class="head-acts"><button class="btn btn-sm btn-ghost" id="btnFullscreen">全屏</button></span></div>
     <div class="mode-tabs" id="modeTabs">
       <button data-mode="focus" class="active">专注</button>
       <button data-mode="short">短休</button>
@@ -107,7 +121,7 @@
       <button id="btnCustom">自定义</button>
     </div>
     <div class="field">
-      <label for="taskInput">任务 // ЗАДАЧА</label>
+      <label for="taskInput"><span data-pixel-copy="这段时间，想做什么？">任务 // ЗАДАЧА</span></label>
       <input id="taskInput" list="taskList" placeholder="本轮专注做什么？" maxlength="200" autocomplete="off">
       <datalist id="taskList"></datalist>
     </div>
@@ -128,11 +142,11 @@
   </section>
 
   <!-- 右：热力图 + 统计 + 记录 -->
-  <div style="display:flex;flex-direction:column;gap:24px;">
+  <div class="dashboard" style="display:flex;flex-direction:column;gap:24px;">
 
     <!-- 热力图 -->
     <section class="panel">
-      <div class="panel-head"><span class="ph-sq"></span> 专注热力图 // ТЕПЛОВАЯ КАРТА <span class="head-acts"><button class="btn btn-sm" id="btnRefresh">⟳ 刷新</button></span></div>
+      <div class="panel-head"><span class="ph-sq"></span> <span data-pixel-copy="专注足迹">专注热力图 // ТЕПЛОВАЯ КАРТА</span> <span class="head-acts"><button class="btn btn-sm" id="btnRefresh">⟳ 刷新</button></span></div>
       <div class="metric-controls" role="group" aria-label="统计口径">
         <button class="btn btn-sm active" data-metric="credited">计划入账</button>
         <button class="btn btn-sm" data-metric="actual">实际投入</button>
@@ -149,7 +163,7 @@
 
     <!-- 切出热力图（红色） -->
     <section class="panel">
-      <div class="panel-head"><span class="ph-sq red"></span> 切出热力图 // КАРТА ПЕРЕРЫВОВ <span class="head-acts"><button class="btn btn-sm btn-ghost" id="quitHmRefresh">⟳</button></span></div>
+      <div class="panel-head"><span class="ph-sq red"></span> <span data-pixel-copy="中断足迹">切出热力图 // КАРТА ПЕРЕРЫВОВ</span> <span class="head-acts"><button class="btn btn-sm btn-ghost" id="quitHmRefresh">⟳</button></span></div>
       <div class="hm-box">
         <div class="hm-days"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
         <div class="hm-cols" id="quitHmCols"></div>
@@ -162,7 +176,7 @@
 
     <!-- 统计 -->
     <section class="panel">
-      <div class="panel-head"><span class="ph-sq"></span> 统计 // СТАТИСТИКА</div>
+      <div class="panel-head"><span class="ph-sq"></span> <span data-pixel-copy="积累的每一分钟">统计 // СТАТИСТИКА</span></div>
       <div class="stats-grid">
         <div class="st"><span class="st-l">完成</span><b id="statDone">0</b></div>
         <div class="st"><span class="st-l">跳过</span><b id="statSkip">0</b></div>
@@ -174,7 +188,7 @@
     </section>
 
     <section class="panel" aria-labelledby="dualTitle">
-      <div class="panel-head" id="dualTitle"><span class="ph-sq"></span> 双口径专注 // ДВА ВЗГЛЯДА</div>
+      <div class="panel-head" id="dualTitle"><span class="ph-sq"></span> <span data-pixel-copy="时间的两种刻度">双口径专注 // ДВА ВЗГЛЯДА</span></div>
       <div class="dual-grid">
         <div class="dual-card"><h2>计划入账</h2><b id="dualCredited">0m</b><p>完成与跳过按计划时长入账</p></div>
         <div class="dual-card actual"><h2>实际投入</h2><b id="dualActual">0m</b><p>运行时长，包含放弃前的投入</p></div>
@@ -184,7 +198,7 @@
     </section>
 
     <section class="panel" aria-labelledby="insightTitle">
-      <div class="panel-head" id="insightTitle"><span class="ph-sq red"></span> 中断洞察 // ПЕРЕРЫВЫ
+      <div class="panel-head" id="insightTitle"><span class="ph-sq red"></span> <span data-pixel-copy="了解你的专注节奏">中断洞察 // ПЕРЕРЫВЫ</span>
         <label class="head-acts">范围 <select id="insightDays" aria-label="中断分析范围"><option value="7">近7天</option><option value="30" selected>近30天</option><option value="90">近90天</option></select></label>
       </div>
       <p id="insightSummary" class="feature-note">暂无中断数据</p>
@@ -194,7 +208,7 @@
     </section>
 
     <section class="panel" aria-labelledby="taskMapTitle">
-      <div class="panel-head" id="taskMapTitle"><span class="ph-sq"></span> 任务进度地图 // КАРТА ЗАДАЧ</div>
+      <div class="panel-head" id="taskMapTitle"><span class="ph-sq"></span> <span data-pixel-copy="正在推进的事">任务进度地图 // КАРТА ЗАДАЧ</span></div>
       <form id="taskGoalForm" class="task-goal-form">
         <label>任务名称<input id="goalName" maxlength="200" required placeholder="例如：完成课程报告" list="taskList"></label>
         <label>预计番茄数<input id="goalTarget" type="number" min="1" max="10000" value="4" required></label>
@@ -206,7 +220,7 @@
 
     <!-- 记录 -->
     <section class="panel">
-      <div class="panel-head"><span class="ph-sq"></span> 记录档案 // АРХИВ <span class="head-acts"><button class="btn btn-sm" id="btnExportJson">JSON</button><button class="btn btn-sm" id="btnExportCsv">CSV</button></span></div>
+      <div class="panel-head"><span class="ph-sq"></span> <span data-pixel-copy="专注记录">记录档案 // АРХИВ</span> <span class="head-acts"><button class="btn btn-sm" id="btnExportJson">JSON</button><button class="btn btn-sm" id="btnExportCsv">CSV</button></span></div>
       <div class="filters" id="filters">
         <button data-kind="all" class="active">全部</button>
         <button data-kind="done">完成</button>
@@ -229,7 +243,7 @@
 <!-- 页脚 -->
 <footer style="max-width:1200px;margin:0 auto;">
   <div class="stripes"></div>
-  <p>DLPromo · ТОМАТО-ЧАСЫ — Flask + SQLite · 放弃不计入总时长，跳过按原计划入账 · 数据保存在 pomodoro.db</p>
+  <p data-pixel-copy="DLPromo · 放弃保留实际投入，跳过按计划入账。">DLPromo · ТОМАТО-ЧАСЫ — Flask + SQLite · 放弃不计入总时长，跳过按原计划入账 · 数据保存在 pomodoro.db</p>
 </footer>
 
 <!-- ============================== 模态框 ============================== -->
@@ -237,7 +251,7 @@
 <!-- 结算模态框 -->
 <div class="modal" id="endModal">
   <div class="modal-panel">
-    <div class="modal-top">结算本轮 // РАСЧЁТ <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="这一轮，进展如何？">结算本轮 // РАСЧЁТ</span> <button class="x">✕</button></div>
     <div class="modal-body center">
       <div class="end-title" id="endTitle">计时结束</div>
       <div class="end-desc" id="endDesc"></div>
@@ -257,7 +271,7 @@
 <!-- 放弃模态框 -->
 <div class="modal" id="abandonModal">
   <div class="modal-panel">
-    <div class="modal-top">放弃本轮 // ОТКАЗ <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="结束这次专注">放弃本轮 // ОТКАЗ</span> <button class="x">✕</button></div>
     <div class="modal-body">
       <div class="end-desc" id="abInfo"></div>
       <label style="display:flex;flex-direction:column;gap:4px;font-size:13px;letter-spacing:1px;">
@@ -275,7 +289,7 @@
 <!-- 编辑记录模态框 -->
 <div class="modal" id="editModal">
   <div class="modal-panel">
-    <div class="modal-top">编辑记录 // РЕДАКТИРОВАТЬ <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="编辑记录">编辑记录 // РЕДАКТИРОВАТЬ</span> <button class="x">✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <label>类型
@@ -304,7 +318,7 @@
 <!-- 自定义时长模态框 -->
 <div class="modal" id="customModal">
   <div class="modal-panel">
-    <div class="modal-top">自定义时长 // НАСТРОЙКА <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="找到适合你的节奏">自定义时长 // НАСТРОЙКА</span> <button class="x">✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <label>专注(分)<input type="number" id="cuFocus" min="1" max="600"></label>
@@ -323,7 +337,7 @@
 <!-- 恢复会话模态框 -->
 <div class="modal" id="resumeModal">
   <div class="modal-panel">
-    <div class="modal-top">继续上次 // ПРОДОЛЖИТЬ <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="继续上次专注">继续上次 // ПРОДОЛЖИТЬ</span> <button class="x">✕</button></div>
     <div class="modal-body center">
       <div class="end-title">发现未结束的计时</div>
       <div class="end-desc" id="resumeInfo"></div>
@@ -347,7 +361,7 @@
 <!-- 切出回来激励模态框（不可关闭，必须填理由） -->
 <div class="modal" id="backModal" data-locked="true">
   <div class="modal-panel">
-    <div class="modal-top">欢迎回来 // С ВОЗВРАЩЕНИЕМ</div>
+    <div class="modal-top"><span data-pixel-copy="欢迎回来">欢迎回来 // С ВОЗВРАЩЕНИЕМ</span></div>
     <div class="modal-body center">
       <div class="end-title" id="backTitle">继续专注！</div>
       <div class="end-desc" id="backDesc"></div>
@@ -364,7 +378,7 @@
 <!-- 删除切出记录理由 -->
 <div class="modal above" id="delQuitModal">
   <div class="modal-panel">
-    <div class="modal-top">删除记录 // УДАЛИТЬ <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="删除记录">删除记录 // УДАЛИТЬ</span> <button class="x">✕</button></div>
     <div class="modal-body center">
       <div class="end-desc" id="delQuitInfo">删除理由（每日最多删除 3 次）</div>
       <textarea id="delQuitReason" rows="2" placeholder="为什么删除？（如：误锁屏）" style="width:100%;padding:9px 10px;border:2px solid var(--ink);background:rgba(255,255,255,.5);font-size:15px;resize:vertical;"></textarea>
@@ -379,7 +393,7 @@
 <!-- 切出记录管理 -->
 <div class="modal" id="quitModal">
   <div class="modal-panel">
-    <div class="modal-top">切出记录 // ПЕРЕРЫВЫ <button class="x">✕</button></div>
+    <div class="modal-top"><span data-pixel-copy="中断记录">切出记录 // ПЕРЕРЫВЫ</span> <button class="x">✕</button></div>
     <div class="modal-body">
       <div class="end-desc" id="quitHint">每次切出自动记录，可修改时间与理由。</div>
       <div id="quitList"></div>

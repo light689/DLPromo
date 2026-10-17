@@ -1,7 +1,7 @@
 /* 只缓存应用资源；API 读写由页面缓存与持久化队列处理。 */
-const CACHE = 'dlpromo-shell-v1';
+const CACHE = 'dlpromo-shell-v2';
 const SHELL = ['/', '/static/style.css', '/static/app.js', '/static/features.js',
-  '/static/dseg7.woff2', '/static/manifest.webmanifest', '/static/icon-192.png', '/static/icon-512.png'];
+  '/static/theme.js', '/static/themes.css', '/static/dseg7.woff2', '/static/manifest.webmanifest', '/static/icon-192.png', '/static/icon-512.png'];
 self.addEventListener('install',event => {
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
 });

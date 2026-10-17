@@ -365,7 +365,8 @@ function render() {
   document.body.dataset.mode = S.mode;
   document.body.classList.toggle('running', S.running);
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', S.mode==='short' ? '#1e50aa' : S.mode==='long' ? '#1e8a3c' : '#ffd100');
+  if (meta) meta.setAttribute('content', document.documentElement.dataset.theme === 'pixel'
+    ? '#f6f7f2' : S.mode==='short' ? '#1e50aa' : S.mode==='long' ? '#1e8a3c' : '#ffd100');
   document.title = timeStr+' · '+(S.mode==='focus'?'专注':'休息')+' | ТОМАТО';
   // 全屏时只更新全屏层，跳过非全屏 DOM，避免 200ms 重绘卡顿
   if (fsActive) {
