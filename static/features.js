@@ -230,7 +230,31 @@ async function initOfflineApp() {
     label.textContent = '使用 HTTPS 或 localhost 可启用离线打开'; return;
   }
   try {
-    await navigator.serviceWorker.register('/sw.js');
+    let controlled = !!navigator.serviceWorker.controller;
+    let pendingUpdate = false, reloading = false;
+    const applyUpdate = () => {
+      if (!pendingUpdate || reloading) return;
+      if (S.running || S.startedAt || saving || document.querySelector('.modal.open')) {
+        label.textContent = '新版已就绪 · 当前会话结束后自动更新';
+        return;
+      }
+      reloading = true;
+      saveTimerState();
+      window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (controlled) { pendingUpdate = true; applyUpdate(); }
+      controlled = true;
+    });
+    const registration = await navigator.serviceWorker.register('/sw.js', {updateViaCache: 'none'});
+    const checkUpdate = () => registration.update().catch(() => {});
+    checkUpdate();
+    window.addEventListener('online', checkUpdate);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) { checkUpdate(); applyUpdate(); }
+    });
+    setInterval(() => { if (!document.hidden) checkUpdate(); }, 300000);
+    setInterval(applyUpdate, 1000);
     await navigator.serviceWorker.ready;
     label.textContent = '离线打开已就绪 · 可添加到主屏幕';
   } catch (_) { label.textContent = '离线资源未就绪，联网后重试'; }
